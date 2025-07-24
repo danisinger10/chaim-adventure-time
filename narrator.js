@@ -54,14 +54,19 @@ async function streamChunk(chunk) {
   if (!res.ok) throw new Error('TTS failed: ' + res.status);
 
   // assemble streamed audio into a blob
-  const reader = res.body.getReader();
-  const parts  = [];
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    parts.push(value);
+  let blob;
+  if (res.body && res.body.getReader) {
+    const reader = res.body.getReader();
+    const parts  = [];
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      parts.push(value);
+    }
+    blob = new Blob(parts, { type: 'audio/mpeg' });
+  } else {
+    blob = await res.blob();
   }
-  const blob  = new Blob(parts, { type: 'audio/mpeg' });
   const audio = new Audio(URL.createObjectURL(blob));
 
   // play completely before returning (prevents overlaps)
