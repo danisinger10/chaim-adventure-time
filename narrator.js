@@ -1,6 +1,21 @@
 // narrator.js — ElevenLabs streamer
-const ELEVEN_KEY = 'sk_c2f8ed0d2ae4f0d0c3c8b119b96d569dc00d888cd1d1f3d8';   // your key
-const VOICE_ID   = 'EiNlNiXeDU1pqqOPrYMO';                                   // your chosen voice
+let ELEVEN_KEY = (window.ELEVEN_API_KEY || localStorage.getItem('elevenlabs_key') || '').trim();   // user key
+const VOICE_ID  = 'EiNlNiXeDU1pqqOPrYMO';                         // your chosen voice
+
+export function setElevenKey(key) {
+  key = (key || '').trim();
+  ELEVEN_KEY = key;
+  if (key) {
+    localStorage.setItem('elevenlabs_key', key);
+  } else {
+    localStorage.removeItem('elevenlabs_key');
+  }
+}
+
+// Automatically use the environment key when provided
+if (window.ELEVEN_API_KEY) {
+  setElevenKey(window.ELEVEN_API_KEY);
+}
 
 let narratorOn   = false;
 let currentAudio = null;
@@ -30,12 +45,17 @@ export async function narrate(text) {
   if (!narratorOn) return;
   const chunks = splitIntoChunks(text);
   let next = fetchAudio(chunks[0]);
-  for (let i = 0; i < chunks.length; i++) {
-    const audio = await next;
-    if (!narratorOn) break;
-    if (i + 1 < chunks.length) next = fetchAudio(chunks[i + 1]);
-    await playAudio(audio);
-    if (!narratorOn) break;
+  try {
+    for (let i = 0; i < chunks.length; i++) {
+      const audio = await next;
+      if (!narratorOn) break;
+      if (i + 1 < chunks.length) next = fetchAudio(chunks[i + 1]);
+      await playAudio(audio);
+      if (!narratorOn) break;
+    }
+  } catch (err) {
+    console.error(err);
+    alert(err.message);
   }
 }
 
@@ -56,7 +76,13 @@ async function fetchAudio(chunk) {
       })
     }
   );
-  if (!res.ok) throw new Error('TTS failed: ' + res.status);
+  if (!res.ok) {
+    if (res.status === 401) {
+      setElevenKey('');
+      throw new Error('TTS failed: invalid or missing ElevenLabs API key.');
+    }
+    throw new Error('TTS failed: ' + res.status);
+  }
 
   // assemble streamed audio into a blob
   const reader = res.body.getReader();
