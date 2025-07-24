@@ -29,6 +29,19 @@
     </footer>
 
     <script type="module">
+      import { narrate, toggleNarrator } from './narrator.js';
+      // === Narrator toggle button ===
+const narrBtn = document.createElement('button');
+narrBtn.textContent = '🎙 Narrator';
+narrBtn.className = 'fixed top-4 right-4 px-4 py-2 rounded-lg bg-yellow-700 text-gray-900 font-bold shadow-lg';
+document.body.appendChild(narrBtn);
+
+narrBtn.addEventListener('click', () => {
+  const enabled = narrBtn.classList.toggle('bg-yellow-500');
+  toggleNarrator(enabled);
+});
+// === End toggle ===
+
       /*
        * Chaim's Adventure v2 (Mobile Fix + UI upgrade)
        *
@@ -243,6 +256,7 @@
             ${scene.choices.map((c, idx) => `<button data-idx="${idx}" class="px-4 py-3 bg-gradient-to-r from-yellow-600 to-yellow-800 hover:from-yellow-500 hover:to-yellow-700 text-gray-900 font-semibold rounded-lg shadow-md transition-colors">${c.text}</button>`).join('')}
           </div>
         `;
+        narrate(scene.description.replace(/<br\\/?>(\\s*)?/g, ' '));
         app.appendChild(wrapper);
         wrapper.querySelectorAll('button[data-idx]').forEach(btn => {
           btn.addEventListener('click', async (e) => {
