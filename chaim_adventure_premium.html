@@ -29,7 +29,57 @@
     </footer>
 
     <script type="module">
-      import { narrate, toggleNarrator } from './narrator.js';
+      import { narrate, toggleNarrator, setNarrator, narratorState } from './narrator.js';
+      const stateKey = 'chaimState';
+      const urlParams = new URLSearchParams(location.search);
+      let room = urlParams.get('room');
+      if (!room) {
+        room = Math.random().toString(36).slice(2, 8);
+        urlParams.set('room', room);
+        window.history.replaceState(null, '', `${location.pathname}?${urlParams}`);
+      }
+      const ws = new WebSocket(`ws://${location.hostname}:8080`);
+      ws.addEventListener('message', (e) => {
+        const msg = JSON.parse(e.data);
+        if (msg.room !== room || !msg.state) return;
+        history = msg.state.history;
+        const scene = msg.state.scene;
+        if (scene) renderScene(scene, false);
+      });
+
+      function saveState(scene = null) {
+        const data = { history, scene, narrator: narratorState() };
+        localStorage.setItem(stateKey, JSON.stringify(data));
+        ws.readyState === 1 && ws.send(JSON.stringify({ room, state: data }));
+      }
+
+      function loadState() {
+        const param = urlParams.get('state');
+        if (param) {
+          try { return JSON.parse(atob(param)); } catch {}
+        }
+        const raw = localStorage.getItem(stateKey);
+        if (raw) {
+          try { return JSON.parse(raw); } catch {}
+        }
+        return null;
+      }
+
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      let recognizer = null;
+      if (SpeechRecognition) {
+        recognizer = new SpeechRecognition();
+        recognizer.lang = 'en-US';
+        recognizer.interimResults = false;
+      }
+
+      function listenForSpeech(callback) {
+        if (!recognizer) return;
+        recognizer.onresult = (e) => {
+          callback(e.results[0][0].transcript.toLowerCase());
+        };
+        recognizer.start();
+      }
       // === Narrator toggle button ===
 const narrBtn = document.createElement('button');
 narrBtn.textContent = '🎙 Narrator';
@@ -39,6 +89,7 @@ document.body.appendChild(narrBtn);
 narrBtn.addEventListener('click', () => {
   const enabled = narrBtn.classList.toggle('bg-yellow-500');
   toggleNarrator(enabled);
+  saveState();
 });
 // === End toggle ===
 
@@ -73,6 +124,14 @@ narrBtn.addEventListener('click', () => {
 
       // History state for context
       let history = [];
+      const saved = loadState();
+      if (saved) {
+        history = saved.history || [];
+        if (saved.narrator) {
+          setNarrator(true);
+          narrBtn.classList.add('bg-yellow-500');
+        }
+      }
 
       // Detect if ReadableStream uploads are supported
       function supportsReadableStreamUploads() {
@@ -238,7 +297,7 @@ narrBtn.addEventListener('click', () => {
       }
 
 // Render story scene
-function renderScene(scene) {
+function renderScene(scene, skipSave = false) {
   app.innerHTML = '';
   const wrapper = document.createElement('div');
   wrapper.className =
@@ -272,6 +331,10 @@ function renderScene(scene) {
         )
         .join('')}
     </div>
+    <div class="flex justify-between items-center pt-4">
+      <button id="speak" class="px-3 py-2 bg-yellow-600 rounded-lg text-gray-900 font-bold shadow">🎤 Speak</button>
+      <button id="share" class="px-3 py-2 bg-yellow-600 rounded-lg text-gray-900 font-bold shadow">Share</button>
+    </div>
   `;
 
   /* ---------- send clean text to ElevenLabs ---------- */
@@ -282,6 +345,35 @@ function renderScene(scene) {
   /* --------------------------------------------------- */
 
   app.appendChild(wrapper);
+  if (!skipSave) saveState(scene);
+
+  const shareBtn = wrapper.querySelector('#share');
+  if (shareBtn) {
+    shareBtn.addEventListener('click', () => {
+      const data = btoa(JSON.stringify({ history, scene }));
+      const link = `${location.origin}${location.pathname}?room=${room}&state=${data}`;
+      navigator.clipboard.writeText(link).then(() => alert('Link copied!'));
+    });
+  }
+
+  const speakBtn = wrapper.querySelector('#speak');
+  if (speakBtn) {
+    speakBtn.addEventListener('click', () => {
+      listenForSpeech((text) => {
+        const num = parseInt(text.match(/\d+/)?.[0] || '', 10) - 1;
+        if (!isNaN(num) && scene.choices[num]) {
+          handleChoice(scene.choices[num].text);
+          return;
+        }
+        for (let i = 0; i < scene.choices.length; i++) {
+          if (text.includes(scene.choices[i].text.toLowerCase())) {
+            handleChoice(scene.choices[i].text);
+            return;
+          }
+        }
+      });
+    });
+  }
 
   wrapper.querySelectorAll('button[data-idx]').forEach((btn) => {
     btn.addEventListener('click', async (e) => {
@@ -349,7 +441,11 @@ function renderScene(scene) {
       }
 
       // Initialize
-      renderHome();
+      if (saved && saved.scene) {
+        renderScene(saved.scene);
+      } else {
+        renderHome();
+      }
     </script>
   </body>
 </html>
