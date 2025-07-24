@@ -9,11 +9,31 @@ export function toggleNarrator(flag) {
   narratorOn = flag;
 }
 
+function splitIntoChunks(text, maxLen = 280) {
+  return text
+    .replace(/\s+/g, ' ')
+    .split(/(?<=[.!?])\s+/)          // sentence boundaries
+    .reduce((chunks, sent) => {
+      if (!chunks.length || (chunks.at(-1) + sent).length > maxLen) {
+        chunks.push(sent);
+      } else {
+        chunks[chunks.length - 1] += ' ' + sent;
+      }
+      return chunks;
+    }, []);
+}
+
 export async function narrate(text) {
   if (!narratorOn) return;
+  for (const chunk of splitIntoChunks(text)) {
+    await streamChunk(chunk);        // defined below
+    if (!narratorOn) break;          // user toggled off in the meantime
+  }
+}
 
+async function streamChunk(chunk) {
   const res = await fetch(
-    `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}/stream`,
+    `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}/stream?optimize_streaming_latency=3`,
     {
       method: 'POST',
       headers: {
@@ -21,13 +41,13 @@ export async function narrate(text) {
         'xi-api-key': ELEVEN_KEY
       },
       body: JSON.stringify({
-        text,
+        text: chunk,
         model_id: 'eleven_multilingual_v2',
-        voice_settings: { stability: 0.4, similarity_boost: 0.9 }
+        voice_settings: { stability: 0.70, similarity_boost: 0.65 }
       })
     }
   );
-  if (!res.ok) throw new Error('ElevenLabs TTS failed');
+  if (!res.ok) throw new Error('TTS failed: ' + res.status);
 
   const reader = res.body.getReader();
   const chunks = [];
@@ -37,6 +57,7 @@ export async function narrate(text) {
     chunks.push(value);
   }
   const blob = new Blob(chunks, { type: 'audio/mpeg' });
-  currentAudio = new Audio(URL.createObjectURL(blob));
-  await currentAudio.play();
+  const audio = new Audio(URL.createObjectURL(blob));
+  await audio.play();
 }
+
