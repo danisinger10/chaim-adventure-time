@@ -237,37 +237,61 @@ narrBtn.addEventListener('click', () => {
         });
       }
 
-      // Render story scene
-      function renderScene(scene) {
-        app.innerHTML = '';
-        const wrapper = document.createElement('div');
-        wrapper.className = 'w-full max-w-3xl mx-auto bg-gray-800/70 p-6 md:p-8 rounded-lg border border-yellow-600 shadow-2xl space-y-6';
-        const descriptionHtml = scene.description
-          .replace(/\*\*(.*?)\*\*/g, '<strong class="text-yellow-300">$1</strong>')
-          .replace(/\n/g, '<br/>');
-        wrapper.innerHTML = `
-          <div class="text-left text-gray-100 space-y-4">
-            ${descriptionHtml}
-          </div>
-          <div class="flex justify-center">
-            ${scene.imageBase64 ? `<img src="data:image/jpeg;base64,${scene.imageBase64}" alt="Scene image" class="rounded-lg shadow-lg max-h-72 object-cover" />` : ''}
-          </div>
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            ${scene.choices.map((c, idx) => `<button data-idx="${idx}" class="px-4 py-3 bg-gradient-to-r from-yellow-600 to-yellow-800 hover:from-yellow-500 hover:to-yellow-700 text-gray-900 font-semibold rounded-lg shadow-md transition-colors">${c.text}</button>`).join('')}
-          </div>
-        `;
-narrate(
-  scene.description.replace(/<br\s*\/?>/gi, ' ')
-);
-        app.appendChild(wrapper);
-        wrapper.querySelectorAll('button[data-idx]').forEach(btn => {
-          btn.addEventListener('click', async (e) => {
-            const index = parseInt(e.currentTarget.getAttribute('data-idx'), 10);
-            const choice = scene.choices[index].text;
-            await handleChoice(choice);
-          });
-        });
+// Render story scene
+function renderScene(scene) {
+  app.innerHTML = '';
+  const wrapper = document.createElement('div');
+  wrapper.className =
+    'w-full max-w-3xl mx-auto bg-gray-800/70 p-6 md:p-8 rounded-lg border border-yellow-600 shadow-2xl space-y-6';
+
+  const descriptionHtml = scene.description
+    .replace(/\*\*(.*?)\*\*/g, '<strong class="text-yellow-300">$1</strong>')
+    .replace(/\n/g, '<br/>');
+
+  wrapper.innerHTML = `
+    <div class="text-left text-gray-100 space-y-4">
+      ${descriptionHtml}
+    </div>
+    <div class="flex justify-center">
+      ${
+        scene.imageBase64
+          ? `<img src="data:image/jpeg;base64,${scene.imageBase64}" alt="Scene image"
+              class="rounded-lg shadow-lg max-h-72 object-cover" />`
+          : ''
       }
+    </div>
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      ${scene.choices
+        .map(
+          (c, idx) => `<button data-idx="${idx}"
+            class="px-4 py-3 bg-gradient-to-r from-yellow-600 to-yellow-800
+                   hover:from-yellow-500 hover:to-yellow-700 text-gray-900
+                   font-semibold rounded-lg shadow-md transition-colors">
+            ${c.text}
+          </button>`
+        )
+        .join('')}
+    </div>
+  `;
+
+  /* ---------- send clean text to ElevenLabs ---------- */
+  const plainText = scene.description
+    .replace(/<br\s*\/?>/gi, ' ')
+    .replace(/<[^>]+>/g, ''); // strip ALL html tags
+  narrate(plainText);
+  /* --------------------------------------------------- */
+
+  app.appendChild(wrapper);
+
+  wrapper.querySelectorAll('button[data-idx]').forEach((btn) => {
+    btn.addEventListener('click', async (e) => {
+      const index  = parseInt(e.currentTarget.getAttribute('data-idx'), 10);
+      const choice = scene.choices[index].text;
+      await handleChoice(choice);
+    });
+  });
+}
+
 
       // Start a new adventure
       async function startGame(theme) {
