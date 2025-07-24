@@ -61,11 +61,11 @@ narrBtn.addEventListener('click', () => {
       // requests from the user; the others are generic examples. Feel free to
       // customize these to your liking.
       const suggestions = [
-        "Chaim's quest to attain his ADHD meds",
-        "Chaim's ambitious venture to launch a new location of his friend's personal training company",
-        "Chaim exploring a mysterious temple in the Amazon",
-        "Chaim solving a cyber‑crime in a futuristic city",
-        "Chaim on a space mission to rescue his crew"
+        "Chaim races to recover his ADHD meds before they fall into the wrong hands",
+        "Chaim's bold push to open a new location of his friend's training studio despite fierce competition",
+        "Chaim exploring a mysterious temple hidden deep in the Amazon",
+        "Chaim untangling a high-stakes cyber‑crime in a futuristic city",
+        "Chaim on a daring space mission to rescue his stranded crew"
       ];
 
       // UI root
@@ -87,8 +87,9 @@ narrBtn.addEventListener('click', () => {
 
       // Prompt instruction builder
       function getPromptInstruction(userRequest) {
-        return `You are an expert text-based adventure game master. Your goal is to create a dynamic, engaging, and imaginative story for a player named Chaim.\n\n` +
+        return `You are an expert text-based adventure game master. Your goal is to craft a gripping, grounded adventure that keeps Chaim on the edge of his seat.\n\n` +
           `- The player character's name is ALWAYS Chaim. Refer to the player as Chaim in the story.\n` +
+          `- Keep the narrative thrilling yet plausible, with real stakes and suspense.\n` +
           `- Your entire response MUST be a single, valid JSON object and nothing else. Do not wrap it in markdown.\n\n` +
           `The JSON object must have this exact structure:\n` +
           `{\n` +
