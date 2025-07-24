@@ -29,12 +29,30 @@
     </footer>
 
     <script type="module">
-      import { narrate, toggleNarrator } from './narrator.js';
+      import { narrate, toggleNarrator, setVoice, VOICE_OPTIONS } from './narrator.js';
       // === Narrator toggle button ===
 const narrBtn = document.createElement('button');
 narrBtn.textContent = '🎙 Narrator';
 narrBtn.className = 'fixed top-4 right-4 px-4 py-2 rounded-lg bg-yellow-700 text-gray-900 font-bold shadow-lg';
 document.body.appendChild(narrBtn);
+
+const voiceSelect = document.createElement('select');
+voiceSelect.className = 'fixed top-4 left-4 px-2 py-1 rounded-lg bg-gray-800 text-yellow-300';
+Object.entries(VOICE_OPTIONS).forEach(([name, id]) => {
+  const opt = document.createElement('option');
+  opt.value = id; opt.textContent = name; voiceSelect.appendChild(opt);
+});
+voiceSelect.addEventListener('change', (e) => {
+  setVoice(e.target.value);
+});
+document.body.appendChild(voiceSelect);
+
+const invBtn = document.createElement('button');
+invBtn.textContent = '📦 Inventory';
+invBtn.className = 'fixed bottom-4 left-4 px-3 py-2 rounded-lg bg-gray-800 text-yellow-300';
+document.body.appendChild(invBtn);
+
+invBtn.addEventListener('click', renderInventory);
 
 narrBtn.addEventListener('click', () => {
   const enabled = narrBtn.classList.toggle('bg-yellow-500');
@@ -68,8 +86,23 @@ narrBtn.addEventListener('click', () => {
         "Chaim on a space mission to rescue his crew"
       ];
 
+      const communityThemes = JSON.parse(localStorage.getItem('communityThemes') || '[]');
+
       // UI root
       const app = document.getElementById('app');
+
+      let gameState = { theme: null, history: [], inventory: [], stats: {}, lastImage: null };
+
+      function loadGameState() {
+        try {
+          const data = JSON.parse(localStorage.getItem('chaimAdventureSave'));
+          if (data) gameState = data;
+        } catch {}
+      }
+
+      function saveGameState() {
+        localStorage.setItem('chaimAdventureSave', JSON.stringify(gameState));
+      }
 
       // History state for context
       let history = [];
@@ -87,7 +120,9 @@ narrBtn.addEventListener('click', () => {
 
       // Prompt instruction builder
       function getPromptInstruction(userRequest) {
-        return `You are an expert text-based adventure game master. Your goal is to create a dynamic, engaging, and imaginative story for a player named Chaim.\n\n` +
+        const inv = gameState.inventory.length ? `Chaim currently carries: ${gameState.inventory.join(', ')}.` : '';
+        const stats = Object.keys(gameState.stats).length ? ` Stats: ${JSON.stringify(gameState.stats)}.` : '';
+        return `You are an expert text-based adventure game master. Your goal is to create a dynamic, engaging, and imaginative story for a player named Chaim. ${inv}${stats}\n\n` +
           `- The player character's name is ALWAYS Chaim. Refer to the player as Chaim in the story.\n` +
           `- Your entire response MUST be a single, valid JSON object and nothing else. Do not wrap it in markdown.\n\n` +
           `The JSON object must have this exact structure:\n` +
@@ -174,7 +209,7 @@ narrBtn.addEventListener('click', () => {
           <h1 class="text-4xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-yellow-500 via-yellow-600 to-yellow-700 drop-shadow-xl">Chaim's Adventure</h1>
           <p class="text-gray-300 text-lg md:text-xl max-w-2xl mx-auto">Embark on an AI‑driven story tailored to Chaim’s quests. Choose a suggested adventure or craft your own theme.</p>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full max-w-2xl">
-            ${suggestions.map((theme, idx) => `
+            ${[...suggestions, ...communityThemes].map(theme => `
               <button data-theme="${encodeURIComponent(theme)}" class="block px-4 py-4 rounded-lg bg-gradient-to-r from-yellow-600 to-yellow-800 hover:from-yellow-500 hover:to-yellow-700 text-gray-900 font-semibold shadow-md transition-colors focus:outline-none">
                 ${theme}
               </button>
@@ -183,6 +218,7 @@ narrBtn.addEventListener('click', () => {
           <div class="w-full max-w-2xl space-y-4">
             <input id="custom-theme" type="text" placeholder="Or enter your own adventure theme" class="w-full p-3 rounded-lg border border-yellow-600 bg-gray-900 text-gray-100 focus:outline-none focus:ring-2 focus:ring-yellow-500" />
             <button id="start-custom" class="w-full px-4 py-3 rounded-lg bg-gradient-to-r from-yellow-500 to-yellow-700 hover:from-yellow-400 hover:to-yellow-600 text-gray-900 font-semibold shadow-md transition-colors focus:outline-none">Start Custom Adventure</button>
+            <button id="save-theme" class="w-full px-4 py-2 bg-yellow-700 text-gray-900 rounded-lg">Save Theme to Community</button>
           </div>
         `;
         app.appendChild(container);
@@ -203,6 +239,78 @@ narrBtn.addEventListener('click', () => {
           }
           history = [];
           await startGame(custom);
+        });
+        container.querySelector('#save-theme').addEventListener('click', () => {
+          const custom = container.querySelector('#custom-theme').value.trim();
+          if (custom && !communityThemes.includes(custom)) {
+            communityThemes.push(custom);
+            localStorage.setItem('communityThemes', JSON.stringify(communityThemes));
+            alert('Saved to community!');
+            renderHome();
+          }
+        });
+      }
+
+      function renderResume() {
+        app.innerHTML = '';
+        const box = document.createElement('div');
+        box.className = 'space-y-4 text-center';
+        box.innerHTML = `
+          <h2 class="text-3xl font-bold">Resume your adventure?</h2>
+          <div class="flex justify-center gap-4">
+            <button id="resume" class="px-4 py-2 bg-yellow-600 text-gray-900 rounded-lg">Resume</button>
+            <button id="new" class="px-4 py-2 bg-gray-700 text-gray-100 rounded-lg">New Game</button>
+          </div>
+        `;
+        app.appendChild(box);
+        box.querySelector('#resume').addEventListener('click', async () => {
+          history = gameState.history;
+          if (history.length) {
+            try {
+              const lastResp = parseGeminiResponse(history.at(-1).parts[0].text);
+              renderScene({ ...lastResp, imageBase64: gameState.lastImage });
+            } catch {
+              renderHome();
+            }
+          } else if (gameState.theme) {
+            startGame(gameState.theme);
+          } else {
+            renderHome();
+          }
+        });
+        box.querySelector('#new').addEventListener('click', () => {
+          gameState = { theme: null, history: [], inventory: [], stats: {}, lastImage: null };
+          saveGameState();
+          renderHome();
+        });
+      }
+
+      function renderInventory() {
+        const overlay = document.createElement('div');
+        overlay.className = 'fixed inset-0 bg-black/70 flex items-center justify-center';
+        overlay.innerHTML = `
+          <div class="bg-gray-800 p-6 rounded-lg space-y-4 max-w-sm w-full">
+            <h3 class="text-xl font-bold text-yellow-400">Inventory</h3>
+            <ul class="space-y-2 text-gray-100">
+              ${gameState.inventory.map(i => `<li>${i}</li>`).join('') || '<li>Empty</li>'}
+            </ul>
+            <input id="new-item" class="w-full p-2 rounded bg-gray-700" placeholder="Add item" />
+            <div class="flex justify-end gap-2">
+              <button id="add-item" class="px-3 py-1 bg-yellow-600 text-gray-900 rounded">Add</button>
+              <button id="close-inv" class="px-3 py-1 bg-gray-600 text-gray-100 rounded">Close</button>
+            </div>
+          </div>
+        `;
+        document.body.appendChild(overlay);
+        overlay.querySelector('#close-inv').addEventListener('click', () => overlay.remove());
+        overlay.querySelector('#add-item').addEventListener('click', () => {
+          const val = overlay.querySelector('#new-item').value.trim();
+          if (val) {
+            gameState.inventory.push(val);
+            saveGameState();
+            overlay.remove();
+            renderInventory();
+          }
         });
       }
 
@@ -272,6 +380,10 @@ function renderScene(scene) {
         )
         .join('')}
     </div>
+    <div class="flex justify-center">
+      <button id="speak-choice" class="mt-4 px-4 py-2 bg-yellow-600 text-gray-900 rounded-lg">🎤 Speak Choice</button>
+      <button id="share" class="mt-4 ml-4 px-4 py-2 bg-yellow-700 text-gray-900 rounded-lg">Share</button>
+    </div>
   `;
 
   /* ---------- send clean text to ElevenLabs ---------- */
@@ -282,6 +394,9 @@ function renderScene(scene) {
   /* --------------------------------------------------- */
 
   app.appendChild(wrapper);
+  gameState.history = history;
+  gameState.lastImage = scene.imageBase64;
+  saveGameState();
 
   wrapper.querySelectorAll('button[data-idx]').forEach((btn) => {
     btn.addEventListener('click', async (e) => {
@@ -289,6 +404,32 @@ function renderScene(scene) {
       const choice = scene.choices[index].text;
       await handleChoice(choice);
     });
+  });
+
+  const speakBtn = wrapper.querySelector('#speak-choice');
+  const shareBtn = wrapper.querySelector('#share');
+  if (window.SpeechRecognition || window.webkitSpeechRecognition) {
+    speakBtn.addEventListener('click', () => {
+      const Rec = window.SpeechRecognition || window.webkitSpeechRecognition;
+      const rec = new Rec();
+      rec.lang = 'en-US';
+      rec.start();
+      rec.onresult = async (evt) => {
+        const said = evt.results[0][0].transcript.toLowerCase();
+        const idx = scene.choices.findIndex(c => said.includes(c.text.toLowerCase()) || said.includes(String(scene.choices.indexOf(c)+1)));
+        if (idx >= 0) {
+          await handleChoice(scene.choices[idx].text);
+        } else {
+          alert('Could not match your choice.');
+        }
+      };
+    });
+  } else {
+    speakBtn.disabled = true;
+  }
+  shareBtn.addEventListener('click', () => {
+    const url = `${location.origin}${location.pathname}?theme=${encodeURIComponent(gameState.theme)}`;
+    navigator.clipboard.writeText(url).then(() => alert('Link copied to clipboard!'));
   });
 }
 
@@ -306,6 +447,10 @@ function renderScene(scene) {
             { role: 'user', parts: [{ text: userMessage }] },
             { role: 'model', parts: [{ text: response.text }] },
           ];
+          gameState.theme = theme;
+          gameState.history = history;
+          gameState.lastImage = imageBase64;
+          saveGameState();
           const scene = { ...geminiResponse, imageBase64 };
           renderScene(scene);
         } catch (err) {
@@ -340,6 +485,9 @@ function renderScene(scene) {
             { role: 'user', parts: [{ text: `Chaim chose: "${choice}"` }] },
             { role: 'model', parts: [{ text: response.text }] },
           ];
+          gameState.history = history;
+          gameState.lastImage = imageBase64;
+          saveGameState();
           const scene = { ...geminiResponse, imageBase64 };
           renderScene(scene);
         } catch (err) {
@@ -349,7 +497,18 @@ function renderScene(scene) {
       }
 
       // Initialize
-      renderHome();
+      loadGameState();
+      if (gameState.history.length) {
+        renderResume();
+      } else {
+        const params = new URLSearchParams(location.search);
+        const themeParam = params.get('theme');
+        if (themeParam) {
+          startGame(themeParam);
+        } else {
+          renderHome();
+        }
+      }
     </script>
   </body>
 </html>
