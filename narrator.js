@@ -1,6 +1,11 @@
 // narrator.js — ElevenLabs streamer
-const ELEVEN_KEY = 'sk_c2f8ed0d2ae4f0d0c3c8b119b96d569dc00d888cd1d1f3d8';   // your key
-const VOICE_ID   = 'EiNlNiXeDU1pqqOPrYMO';                                   // your chosen voice
+let ELEVEN_KEY = localStorage.getItem('elevenlabs_key') || '';   // user key
+const VOICE_ID  = 'EiNlNiXeDU1pqqOPrYMO';                         // your chosen voice
+
+export function setElevenKey(key) {
+  ELEVEN_KEY = key;
+  if (key) localStorage.setItem('elevenlabs_key', key);
+}
 
 let narratorOn   = false;
 let currentAudio = null;
@@ -56,7 +61,12 @@ async function fetchAudio(chunk) {
       })
     }
   );
-  if (!res.ok) throw new Error('TTS failed: ' + res.status);
+  if (!res.ok) {
+    if (res.status === 401) {
+      throw new Error('TTS failed: invalid or missing ElevenLabs API key.');
+    }
+    throw new Error('TTS failed: ' + res.status);
+  }
 
   // assemble streamed audio into a blob
   const reader = res.body.getReader();
