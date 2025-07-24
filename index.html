@@ -4,364 +4,257 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Chaim's Adventure</title>
+
     <!-- Tailwind for styling -->
     <script src="https://cdn.tailwindcss.com"></script>
+
     <!-- Premium fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Inter:wght@400;600&display=swap" rel="stylesheet" />
+
     <style>
-      /* Use premium fonts for headings and body */
-      h1, h2, h3 {
-        font-family: 'Playfair Display', serif;
-      }
-      body, input, button, p, span {
-        font-family: 'Inter', sans-serif;
-      }
-      /* Custom styles for nicer typography */
-      .story-paragraph {
-        @apply mb-4 text-lg md:text-xl leading-relaxed;
-      }
+      /* premium fonts */
+      h1,h2,h3 { font-family: 'Playfair Display', serif; }
+      body,input,button,p,span { font-family: 'Inter', sans-serif; }
+
+      .story-paragraph { @apply mb-4 text-lg md:text-xl leading-relaxed; }
     </style>
   </head>
+
   <body class="min-h-screen bg-gradient-to-br from-black via-gray-900 to-gray-800 text-gray-100 flex flex-col">
+
+    <!-- React / vanilla root -->
     <div id="app" class="flex-grow flex items-center justify-center p-4"></div>
+
     <footer class="text-center text-gray-500 text-sm py-4">
-      Powered by Google Gemini &amp; Imagen. Each adventure is unique.
+      Powered by Google Gemini & Imagen. Each adventure is unique.
     </footer>
+
+    <!-- single persistent audio element (mobile unlock requires it) -->
+    <audio id="narrator-audio-element" preload="auto"></audio>
 
     <script type="module">
       import { narrate, toggleNarrator } from './narrator.js';
-      // === Narrator toggle button ===
-const narrBtn = document.createElement('button');
-narrBtn.textContent = '🎙 Narrator';
-narrBtn.className = 'fixed top-4 right-4 px-4 py-2 rounded-lg bg-yellow-700 text-gray-900 font-bold shadow-lg';
-document.body.appendChild(narrBtn);
+      import { GoogleGenAI }          from 'https://esm.sh/@google/genai@1.11.0?bundle';
 
-narrBtn.addEventListener('click', () => {
-  const enabled = narrBtn.classList.toggle('bg-yellow-500');
-  toggleNarrator(enabled);
-});
-// === End toggle ===
+      /* ---------------- narrator controls ---------------- */
+      const narrBtn = document.createElement('button');
+      narrBtn.textContent = '🎙 Narrator';
+      narrBtn.className = 'fixed top-4 right-4 px-4 py-2 rounded-lg bg-yellow-700 text-gray-900 font-bold shadow-lg transition';
+      document.body.appendChild(narrBtn);
 
-      /*
-       * Chaim's Adventure v2 (Mobile Fix + UI upgrade)
-       *
-       * This version automatically uses a provided API key and presents a
-       * redesigned home screen with suggested adventures. The mobile upload bug
-       * is handled via a fallback when ReadableStream uploads are unsupported.
-       */
+      narrBtn.addEventListener('click', () => {
+        const enabled = narrBtn.classList.toggle('bg-yellow-500');
+        toggleNarrator(enabled);
+      });
 
-      import { GoogleGenAI } from 'https://esm.sh/@google/genai@1.11.0?bundle';
+      /* optional test‑speak button — remove in prod */
+      const speakBtn = document.createElement('button');
+      speakBtn.textContent = '🔊 Speak test';
+      speakBtn.className = 'fixed top-4 right-36 px-4 py-2 rounded-lg bg-yellow-700 text-gray-900 font-bold shadow-lg transition';
+      document.body.appendChild(speakBtn);
+      speakBtn.addEventListener('click', () =>
+        narrate('You turn the corner and see a dragon…')
+      );
+      /* ---------------------------------------------------- */
 
-      // Automatically use the user-provided API key. This removes the need
-      // for manual API key entry.
-      const apiKey = 'AIzaSyBOMarZfaw9O5v5ncQjocSRQ-G2I55Onb8';
-      let ai = new GoogleGenAI({ apiKey });
+      /* ---------------- Gemini / game setup --------------- */
+      const apiKey = 'YOUR_GEMINI_KEY';          // TODO secure via env / server
+      const ai     = new GoogleGenAI({ apiKey });
 
-      // Suggested adventure themes. The first two suggestions are specific
-      // requests from the user; the others are generic examples. Feel free to
-      // customize these to your liking.
       const suggestions = [
         "Chaim races to recover his ADHD meds before they fall into the wrong hands",
         "Chaim's bold push to open a new location of his friend's training studio despite fierce competition",
         "Chaim exploring a mysterious temple hidden deep in the Amazon",
-        "Chaim untangling a high-stakes cyber‑crime in a futuristic city",
+        "Chaim untangling a high‑stakes cyber‑crime in a futuristic city",
         "Chaim on a daring space mission to rescue his stranded crew"
       ];
 
-      // UI root
-      const app = document.getElementById('app');
+      const app     = document.getElementById('app');
+      let   history = [];
 
-      // History state for context
-      let history = [];
-
-      // Detect if ReadableStream uploads are supported
       function supportsReadableStreamUploads() {
-        try {
-          // eslint-disable-next-line no-new
-          new ReadableStream();
-          return true;
-        } catch (e) {
-          return false;
-        }
+        try { new ReadableStream(); return true; } catch { return false; }
       }
 
-      // Prompt instruction builder
+      /* ---------- prompt‑builder helper ---------- */
       function getPromptInstruction(userRequest) {
-        return `You are an expert text-based adventure game master. Your goal is to craft a gripping, grounded adventure that keeps Chaim on the edge of his seat.\n\n` +
+        return (
+          `You are an expert text-based adventure game master. Your goal is to craft a gripping, grounded adventure that keeps Chaim on the edge of his seat.\n\n` +
           `- The player character's name is ALWAYS Chaim. Refer to the player as Chaim in the story.\n` +
           `- Keep the narrative thrilling yet plausible, with real stakes and suspense.\n` +
           `- Your entire response MUST be a single, valid JSON object and nothing else. Do not wrap it in markdown.\n\n` +
           `The JSON object must have this exact structure:\n` +
           `{\n` +
-          `  "description": "A detailed, immersive description of the current scene, formatted as 2-3 short paragraphs separated by a newline character ('\\n'). Write in the second person about 'Chaim' (e.g., 'You see...'). Wrap key nouns (items, characters, locations) in markdown bold (e.g., **the ancient sword**) to highlight them.",\n` +
-          `  "imagePrompt": "A concise, descriptive prompt for an image generator that includes Chaim. Focus on key visual elements: subject (Chaim), setting, mood, and style (e.g., 'cinematic, dark fantasy, Chaim stands before a glowing portal in a crumbling ruin').",\n` +
+          `  "description": "A detailed, immersive description of the current scene, formatted as 2‑3 short paragraphs separated by a newline character (\\n). Write in the second person about 'Chaim'. Wrap key nouns in **markdown bold**.",\n` +
+          `  "imagePrompt": "A concise prompt for an image generator that includes Chaim.",\n` +
           `  "choices": [\n` +
-          `    { "text": "A short, actionable phrase for the first choice." },\n` +
-          `    { "text": "A short, actionable phrase for the second choice." },\n` +
-          `    { "text": "A short, actionable phrase for a third choice." }\n` +
+          `    { "text": "choice 1" },\n` +
+          `    { "text": "choice 2" },\n` +
+          `    { "text": "choice 3" }\n` +
           `  ]\n` +
           `}\n\n` +
-          `Now, fulfill this request for Chaim:\n${userRequest}`;
+          `Now, fulfill this request for Chaim:\n${userRequest}`
+        );
       }
 
-      function parseGeminiResponse(responseText) {
-        if (!responseText) {
-          throw new Error('Gemini returned an empty response.');
-        }
-        const cleanJson = responseText.replace(/^```json/, '').replace(/```$/, '').trim();
-        let parsed;
-        try {
-          parsed = JSON.parse(cleanJson);
-        } catch (err) {
-          console.error('Failed to parse Gemini response as JSON:', responseText);
-          throw new Error('The story took an unexpected turn. The format of the response was unreadable.');
-        }
-        if (!parsed.description || !parsed.imagePrompt || !Array.isArray(parsed.choices)) {
-          throw new Error('Invalid JSON structure from Gemini.');
-        }
-        return parsed;
+      /* ---------- Gemini response parser ---------- */
+      function parseGeminiResponse(txt) {
+        if (!txt) throw new Error('Gemini returned empty response.');
+        const clean = txt.replace(/^```json/, '').replace(/```$/, '').trim();
+        let obj;
+        try { obj = JSON.parse(clean); }
+        catch { throw new Error('Invalid JSON from Gemini.'); }
+        if (!obj.description || !obj.imagePrompt || !Array.isArray(obj.choices))
+          throw new Error('Malformed JSON structure.');
+        return obj;
       }
 
+      /* ---------- Gemini wrapper (handles fallback when streams unsupported) ---------- */
       async function generateContentSafe(model, prompt) {
         if (!supportsReadableStreamUploads()) {
-          const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
-          const body = { contents: [{ role: 'user', parts: [{ text: prompt }] }] };
-          const res = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body),
+          const url  = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
+          const body = { contents: [{ role:'user', parts:[{ text: prompt }] }] };
+          const res  = await fetch(url, {
+            method : 'POST',
+            headers: { 'Content-Type':'application/json' },
+            body   : JSON.stringify(body)
           });
-          if (!res.ok) {
-            const errText = await res.text();
-            throw new Error(`Gemini API request failed: ${res.status} ${res.statusText}\n${errText}`);
-          }
+          if (!res.ok) throw new Error('Gemini REST failed ' + res.status);
           const data = await res.json();
-          const candidate = data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0] && data.candidates[0].content.parts[0].text;
-          if (!candidate) {
-            throw new Error('Gemini API returned no content');
-          }
+          const candidate = data.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (!candidate) throw new Error('Gemini returned no content');
           return { text: candidate };
         }
         return await ai.models.generateContent({ model, contents: prompt });
       }
 
       async function generateImage(prompt) {
-        try {
-          const response = await ai.models.generateImages({
-            model: 'imagen-3.0-generate-002',
-            prompt: `${prompt}, cinematic lighting, fantasy art, epic, highly detailed`,
-            config: {
-              numberOfImages: 1,
-              outputMimeType: 'image/jpeg',
-              aspectRatio: '16:9',
-            },
-          });
-          if (!response.generatedImages || response.generatedImages.length === 0) {
-            throw new Error('Image generation failed, no images returned.');
-          }
-          return response.generatedImages[0].image.imageBytes;
-        } catch (error) {
-          console.error('Error generating image:', error);
-          throw new Error('Failed to generate scene image.');
-        }
+        const resp = await ai.models.generateImages({
+          model : 'imagen-3.0-generate-002',
+          prompt: `${prompt}, cinematic lighting, highly detailed`,
+          config: { numberOfImages:1, outputMimeType:'image/jpeg', aspectRatio:'16:9' }
+        });
+        if (!resp.generatedImages?.length) throw new Error('No images returned.');
+        return resp.generatedImages[0].image.imageBytes;
       }
 
-      // Render home screen
+      /* ---------- UI helpers ---------- */
+      function renderLoading(msg='Generating your adventure…') {
+        app.innerHTML =
+          `<div class="text-center space-y-4">
+             <svg class="animate-spin h-10 w-10 text-yellow-400" viewBox="0 0 24 24" fill="none">
+               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+               <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+             </svg>
+             <p class="text-lg text-yellow-300 animate-pulse">${msg}</p>
+           </div>`;
+      }
+
+      function renderError(msg) {
+        app.innerHTML =
+          `<div class="max-w-md mx-auto text-center bg-gray-800/80 p-6 rounded-lg border border-yellow-600 space-y-4">
+             <h2 class="text-2xl font-bold text-yellow-400">Error</h2>
+             <p class="text-yellow-300">${msg}</p>
+             <button id="restart" class="px-4 py-2 bg-gradient-to-r from-yellow-500 to-yellow-700 text-gray-900 font-semibold rounded-lg">Back to Home</button>
+           </div>`;
+        document.getElementById('restart').onclick = renderHome;
+      }
+
       function renderHome() {
-        app.innerHTML = '';
-        const container = document.createElement('div');
-        container.className = 'max-w-3xl w-full text-center flex flex-col items-center space-y-8';
-        container.innerHTML = `
-          <h1 class="text-4xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-yellow-500 via-yellow-600 to-yellow-700 drop-shadow-xl">Chaim's Adventure</h1>
-          <p class="text-gray-300 text-lg md:text-xl max-w-2xl mx-auto">Embark on an AI‑driven story tailored to Chaim’s quests. Choose a suggested adventure or craft your own theme.</p>
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full max-w-2xl">
-            ${suggestions.map((theme, idx) => `
-              <button data-theme="${encodeURIComponent(theme)}" class="block px-4 py-4 rounded-lg bg-gradient-to-r from-yellow-600 to-yellow-800 hover:from-yellow-500 hover:to-yellow-700 text-gray-900 font-semibold shadow-md transition-colors focus:outline-none">
-                ${theme}
-              </button>
-            `).join('')}
-          </div>
-          <div class="w-full max-w-2xl space-y-4">
-            <input id="custom-theme" type="text" placeholder="Or enter your own adventure theme" class="w-full p-3 rounded-lg border border-yellow-600 bg-gray-900 text-gray-100 focus:outline-none focus:ring-2 focus:ring-yellow-500" />
-            <button id="start-custom" class="w-full px-4 py-3 rounded-lg bg-gradient-to-r from-yellow-500 to-yellow-700 hover:from-yellow-400 hover:to-yellow-600 text-gray-900 font-semibold shadow-md transition-colors focus:outline-none">Start Custom Adventure</button>
-          </div>
-        `;
-        app.appendChild(container);
-        // Attach event listeners for suggested themes
-        container.querySelectorAll('button[data-theme]').forEach(btn => {
-          btn.addEventListener('click', async (e) => {
-            const theme = decodeURIComponent(e.currentTarget.getAttribute('data-theme'));
-            history = [];
-            await startGame(theme);
-          });
-        });
-        // Custom theme button
-        container.querySelector('#start-custom').addEventListener('click', async () => {
-          const custom = container.querySelector('#custom-theme').value.trim();
-          if (!custom) {
-            alert('Please enter a theme or select a suggestion.');
-            return;
-          }
-          history = [];
-          await startGame(custom);
-        });
+        app.innerHTML =
+          `<div class="max-w-3xl mx-auto text-center space-y-8">
+             <h1 class="text-4xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-yellow-500 via-yellow-600 to-yellow-700 drop-shadow-xl">Chaim's Adventure</h1>
+             <p class="text-gray-300 text-lg md:text-xl max-w-2xl mx-auto">
+               Embark on an AI‑driven story tailored to Chaim’s quests.
+             </p>
+             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl mx-auto">
+               ${suggestions.map(t => `<button data-theme="${encodeURIComponent(t)}"
+                   class="px-4 py-4 rounded-lg bg-gradient-to-r from-yellow-600 to-yellow-800 text-gray-900 font-semibold shadow-md">
+                   ${t}</button>`).join('')}
+             </div>
+             <div class="max-w-2xl mx-auto space-y-4">
+               <input id="custom-theme" type="text" placeholder="Or enter your own adventure theme"
+                 class="w-full p-3 rounded-lg border border-yellow-600 bg-gray-900 text-gray-100" />
+               <button id="start-custom"
+                 class="w-full px-4 py-3 rounded-lg bg-gradient-to-r from-yellow-500 to-yellow-700 text-gray-900 font-semibold">
+                 Start Custom Adventure</button>
+             </div>
+           </div>`;
+
+        document.querySelectorAll('button[data-theme]').forEach(b =>
+          b.onclick = () => startGame(decodeURIComponent(b.dataset.theme))
+        );
+        document.getElementById('start-custom').onclick = () => {
+          const custom = document.getElementById('custom-theme').value.trim();
+          if (!custom) return alert('Enter a theme or pick one.');
+          startGame(custom);
+        };
       }
 
-      // Render loading screen
-      function renderLoading(message = 'Generating your adventure...') {
-        app.innerHTML = '';
-        const loading = document.createElement('div');
-        loading.className = 'text-center flex flex-col items-center space-y-4';
-        loading.innerHTML = `
-          <svg class="animate-spin h-10 w-10 text-yellow-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-          </svg>
-          <p class="text-lg text-yellow-300 animate-pulse">${message}</p>
-        `;
-        app.appendChild(loading);
+      function renderScene(scene) {
+        app.innerHTML =
+          `<div class="w-full max-w-3xl mx-auto bg-gray-800/70 p-6 md:p-8 rounded-lg border border-yellow-600 shadow-2xl space-y-6">
+             <div class="space-y-4 text-left text-gray-100">
+               ${scene.description.replace(/\*\*(.*?)\*\*/g,'<strong class=\"text-yellow-300\">$1</strong>').replace(/\n/g,'<br/>')}
+             </div>
+             ${scene.imageBase64 ? `
+               <div class="flex justify-center">
+                 <img class="rounded-lg shadow-lg max-h-72 object-cover"
+                      src="data:image/jpeg;base64,${scene.imageBase64}" alt="Scene image"/>
+               </div>` : ''}
+             <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+               ${scene.choices.map((c,i)=>
+                 `<button data-idx="${i}"
+                    class="px-4 py-3 bg-gradient-to-r from-yellow-600 to-yellow-800 hover:from-yellow-500 hover:to-yellow-700 text-gray-900 font-semibold rounded-lg shadow-md">
+                    ${c.text}</button>`).join('')}
+             </div>
+           </div>`;
+
+        narrate(scene.description.replace(/<[^>]+>/g,' ').replace(/\s+/g,' '));
+
+        document.querySelectorAll('button[data-idx]').forEach(btn =>
+          btn.onclick = () => handleChoice(scene.choices[+btn.dataset.idx].text)
+        );
       }
 
-      // Render error screen
-      function renderError(errorMessage) {
-        app.innerHTML = '';
-        const err = document.createElement('div');
-        err.className = 'max-w-md mx-auto text-center bg-gray-800/80 p-6 rounded-lg border border-yellow-600 space-y-4';
-        err.innerHTML = `
-          <h2 class="text-2xl font-bold text-yellow-400">An Error Occurred</h2>
-          <p class="text-yellow-300">${errorMessage}</p>
-          <button id="restart" class="px-4 py-2 bg-gradient-to-r from-yellow-500 to-yellow-700 hover:from-yellow-400 hover:to-yellow-600 text-gray-900 font-semibold rounded-lg transition-colors">Back to Home</button>
-        `;
-        app.appendChild(err);
-        err.querySelector('#restart').addEventListener('click', () => {
-          renderHome();
-        });
-      }
-
-// Render story scene
-function renderScene(scene) {
-  app.innerHTML = '';
-  const wrapper = document.createElement('div');
-  wrapper.className =
-    'w-full max-w-3xl mx-auto bg-gray-800/70 p-6 md:p-8 rounded-lg border border-yellow-600 shadow-2xl space-y-6';
-
-  const descriptionHtml = scene.description
-    .replace(/\*\*(.*?)\*\*/g, '<strong class="text-yellow-300">$1</strong>')
-    .replace(/\n/g, '<br/>');
-
-  wrapper.innerHTML = `
-    <div class="text-left text-gray-100 space-y-4">
-      ${descriptionHtml}
-    </div>
-    <div class="flex justify-center">
-      ${
-        scene.imageBase64
-          ? `<img src="data:image/jpeg;base64,${scene.imageBase64}" alt="Scene image"
-              class="rounded-lg shadow-lg max-h-72 object-cover" />`
-          : ''
-      }
-    </div>
-    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-      ${scene.choices
-        .map(
-          (c, idx) => `<button data-idx="${idx}"
-            class="px-4 py-3 bg-gradient-to-r from-yellow-600 to-yellow-800
-                   hover:from-yellow-500 hover:to-yellow-700 text-gray-900
-                   font-semibold rounded-lg shadow-md transition-colors">
-            ${c.text}
-          </button>`
-        )
-        .join('')}
-    </div>
-  `;
-
-  /* ---------- send clean text to ElevenLabs ---------- */
-  const plainText = scene.description
-    .replace(/<br\s*\/?>/gi, ' ')
-    .replace(/<[^>]+>/g, ''); // strip ALL html tags
-  narrate(plainText);
-  /* --------------------------------------------------- */
-
-  app.appendChild(wrapper);
-
-  wrapper.querySelectorAll('button[data-idx]').forEach((btn) => {
-    btn.addEventListener('click', async (e) => {
-      const index  = parseInt(e.currentTarget.getAttribute('data-idx'), 10);
-      const choice = scene.choices[index].text;
-      await handleChoice(choice);
-    });
-  });
-}
-
-
-      // Start a new adventure
+      /* ---------- game flow ---------- */
       async function startGame(theme) {
         try {
           renderLoading();
-          const userMessage = `Start a new adventure for Chaim with the theme: "${theme}"`;
-          const fullPrompt = getPromptInstruction(userMessage);
-          const response = await generateContentSafe('gemini-2.5-flash', fullPrompt);
-          const geminiResponse = parseGeminiResponse(response.text);
-          const imageBase64 = await generateImage(geminiResponse.imagePrompt);
+          const prompt = getPromptInstruction(`Start a new adventure for Chaim with the theme: \"${theme}\"`);
+          const resp   = await generateContentSafe('gemini-2.5-flash', prompt);
+          const parsed = parseGeminiResponse(resp.text);
+          const imgB64 = await generateImage(parsed.imagePrompt);
+
           history = [
-            { role: 'user', parts: [{ text: userMessage }] },
-            { role: 'model', parts: [{ text: response.text }] },
+            { role:'user' , parts:[{ text:`Start theme: ${theme}` }] },
+            { role:'model', parts:[{ text:resp.text              }] }
           ];
-          const scene = { ...geminiResponse, imageBase64 };
-          renderScene(scene);
-        } catch (err) {
-          console.error(err);
-          renderError(err instanceof Error ? err.message : String(err));
-        }
+          renderScene({ ...parsed, imageBase64: imgB64 });
+        } catch (err) { renderError(err.message ?? String(err)); }
       }
 
-      // Handle player's choice
       async function handleChoice(choice) {
         try {
-          renderLoading('Generating the next scene...');
-          let storyContext = '';
-          if (history.length > 0) {
-            const lastModelTurn = history[history.length - 1];
-            if (lastModelTurn && lastModelTurn.role === 'model') {
-              try {
-                const lastResponse = parseGeminiResponse(lastModelTurn.parts[0].text);
-                storyContext = `The story so far: ${lastResponse.description}\n\n`;
-              } catch (e) {
-                console.warn('Could not parse last model turn for context.', e);
-              }
-            }
-          }
-          const userRequest = `${storyContext}Chaim's next action is: "${choice}". What happens now?`;
-          const fullPrompt = getPromptInstruction(userRequest);
-          const response = await generateContentSafe('gemini-2.5-flash', fullPrompt);
-          const geminiResponse = parseGeminiResponse(response.text);
-          const imageBase64 = await generateImage(geminiResponse.imagePrompt);
-          history = [
-            ...history,
-            { role: 'user', parts: [{ text: `Chaim chose: "${choice}"` }] },
-            { role: 'model', parts: [{ text: response.text }] },
-          ];
-          const scene = { ...geminiResponse, imageBase64 };
-          renderScene(scene);
-        } catch (err) {
-          console.error(err);
-          renderError(err instanceof Error ? err.message : String(err));
-        }
+          renderLoading('Generating the next scene…');
+          const ctxt = history.at(-1)?.parts?.[0]?.text
+            ? `The story so far: ${parseGeminiResponse(history.at(-1).parts[0].text).description}\n\n`
+            : '';
+          const prompt = getPromptInstruction(`${ctxt}Chaim's next action is: \"${choice}\". What happens now?`);
+          const resp   = await generateContentSafe('gemini-2.5-flash', prompt);
+          const parsed = parseGeminiResponse(resp.text);
+          const imgB64 = await generateImage(parsed.imagePrompt);
+
+          history.push(
+            { role:'user' , parts:[{ text:`Chaim chose: ${choice}` }] },
+            { role:'model', parts:[{ text:resp.text                }] }
+          );
+          renderScene({ ...parsed, imageBase64: imgB64 });
+        } catch (err) { renderError(err.message ?? String(err)); }
       }
 
-      // Initialize
+      /* ---------- boot ---------- */
       renderHome();
     </script>
-    <audio id="narrator-audio-element" style="display: none;"></audio>
-    <!-- …your existing content… -->
-
-<button onclick="toggleNarrator(true)">Narrator ON</button>
-<button onclick="toggleNarrator(false)">Narrator OFF</button>
-<button onclick="narrate('You turn the corner and see a dragon…')">Speak</button>
-
-<audio id="narrator-audio-element" preload="auto"></audio>
-
-</body>
-
   </body>
 </html>
