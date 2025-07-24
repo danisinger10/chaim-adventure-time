@@ -3,8 +3,13 @@ let ELEVEN_KEY = localStorage.getItem('elevenlabs_key') || '';   // user key
 const VOICE_ID  = 'EiNlNiXeDU1pqqOPrYMO';                         // your chosen voice
 
 export function setElevenKey(key) {
+  key = (key || '').trim();
   ELEVEN_KEY = key;
-  if (key) localStorage.setItem('elevenlabs_key', key);
+  if (key) {
+    localStorage.setItem('elevenlabs_key', key);
+  } else {
+    localStorage.removeItem('elevenlabs_key');
+  }
 }
 
 let narratorOn   = false;
@@ -35,12 +40,17 @@ export async function narrate(text) {
   if (!narratorOn) return;
   const chunks = splitIntoChunks(text);
   let next = fetchAudio(chunks[0]);
-  for (let i = 0; i < chunks.length; i++) {
-    const audio = await next;
-    if (!narratorOn) break;
-    if (i + 1 < chunks.length) next = fetchAudio(chunks[i + 1]);
-    await playAudio(audio);
-    if (!narratorOn) break;
+  try {
+    for (let i = 0; i < chunks.length; i++) {
+      const audio = await next;
+      if (!narratorOn) break;
+      if (i + 1 < chunks.length) next = fetchAudio(chunks[i + 1]);
+      await playAudio(audio);
+      if (!narratorOn) break;
+    }
+  } catch (err) {
+    console.error(err);
+    alert(err.message);
   }
 }
 
@@ -63,6 +73,7 @@ async function fetchAudio(chunk) {
   );
   if (!res.ok) {
     if (res.status === 401) {
+      setElevenKey('');
       throw new Error('TTS failed: invalid or missing ElevenLabs API key.');
     }
     throw new Error('TTS failed: ' + res.status);

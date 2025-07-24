@@ -40,16 +40,17 @@ narrBtn.addEventListener('click', () => {
   const enabled = narrBtn.classList.toggle('bg-yellow-500');
   toggleNarrator(enabled);
   if (enabled) {
-    const stored = localStorage.getItem('elevenlabs_key');
-    if (!stored) {
-      const key = prompt('Enter your ElevenLabs API key');
-      if (key) {
-        setElevenKey(key);
-      } else {
+    let key = localStorage.getItem('elevenlabs_key');
+    if (!key) {
+      key = prompt('Enter your ElevenLabs API key') || '';
+      key = key.trim();
+      if (!key) {
         narrBtn.classList.remove('bg-yellow-500');
         toggleNarrator(false);
+        return;
       }
     }
+    setElevenKey(key.trim());
   }
 });
 // === End toggle ===
