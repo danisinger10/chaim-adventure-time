@@ -256,7 +256,9 @@ narrBtn.addEventListener('click', () => {
             ${scene.choices.map((c, idx) => `<button data-idx="${idx}" class="px-4 py-3 bg-gradient-to-r from-yellow-600 to-yellow-800 hover:from-yellow-500 hover:to-yellow-700 text-gray-900 font-semibold rounded-lg shadow-md transition-colors">${c.text}</button>`).join('')}
           </div>
         `;
-        narrate(scene.description.replace(/<br\\/?>(\\s*)?/g, ' '));
+narrate(
+  scene.description.replace(/<br\s*\/?>/gi, ' ')
+);
         app.appendChild(wrapper);
         wrapper.querySelectorAll('button[data-idx]').forEach(btn => {
           btn.addEventListener('click', async (e) => {
