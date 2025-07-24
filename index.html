@@ -243,6 +243,9 @@ function renderScene(scene) {
   const wrapper = document.createElement('div');
   wrapper.className =
     'w-full max-w-3xl mx-auto bg-gray-800/70 p-6 md:p-8 rounded-lg border border-yellow-600 shadow-2xl space-y-6';
+  
+  // Narrate original text before adding any HTML formatting
+  narrate(scene.description);
 
   const descriptionHtml = scene.description
     .replace(/\*\*(.*?)\*\*/g, '<strong class="text-yellow-300">$1</strong>')
@@ -274,12 +277,7 @@ function renderScene(scene) {
     </div>
   `;
 
-  /* ---------- send clean text to ElevenLabs ---------- */
-  const plainText = scene.description
-    .replace(/<br\s*\/?>/gi, ' ')
-    .replace(/<[^>]+>/g, ''); // strip ALL html tags
-  narrate(plainText);
-  /* --------------------------------------------------- */
+
 
   app.appendChild(wrapper);
 
