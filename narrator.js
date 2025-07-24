@@ -8,28 +8,23 @@ let audioUnlocked = false;
 const narratorAudioElement = document.getElementById('narrator-audio-element');
 
 /**
- * Unlocks the persistent audio element for playback on mobile.
- * This must be called from a user-initiated event (e.g., a click).
+ * Plays a short silent clip to unlock audio on mobile.
+ * Should be triggered from a user gesture.
  */
-function unlockAudio() {
-  if (audioUnlocked || !narratorAudioElement) return;
-  
-  // Play and immediately pause the element to "prime" it.
-  // The browser now considers this element safe for programmatic playback.
-  narratorAudioElement.play().then(() => {
-    narratorAudioElement.pause();
-    audioUnlocked = true;
-    console.log('Audio element unlocked for playback.');
-  }).catch(error => {
-    // This can fail on desktop or if already unlocked, which is fine.
-    console.warn('Audio unlock failed, but this may not be an error:', error);
-  });
+function unlockAudioForMobile() {
+  if (audioUnlocked) return;
+  const silentAudio = new Audio(
+    'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA='
+  );
+  silentAudio.volume = 0;
+  silentAudio.play().catch(() => {}); // ignore rejection on desktop
+  audioUnlocked = true;
 }
 
 export function toggleNarrator(flag) {
-  // On the first time the narrator is turned ON, unlock the audio element.
+  // On the first time the narrator is turned ON, unlock the audio API.
   if (flag && !audioUnlocked) {
-    unlockAudio();
+    unlockAudioForMobile();
   }
 
   // If turning off, pause and clear any current audio.
