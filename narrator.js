@@ -2,11 +2,42 @@
 const ELEVEN_KEY = 'sk_c2f8ed0d2ae4f0d0c3c8b119b96d569dc00d888cd1d1f3d8';   // your key
 const VOICE_ID   = 'EiNlNiXeDU1pqqOPrYMO';                                   // your chosen voice
 
-let narratorOn   = false;
-let currentAudio = null;
+let narratorOn    = false;
+let audioUnlocked = false;
+// Get the persistent audio element from the DOM
+const narratorAudioElement = document.getElementById('narrator-audio-element');
+
+/**
+ * Unlocks the persistent audio element for playback on mobile.
+ * This must be called from a user-initiated event (e.g., a click).
+ */
+function unlockAudio() {
+  if (audioUnlocked || !narratorAudioElement) return;
+  
+  // Play and immediately pause the element to "prime" it.
+  // The browser now considers this element safe for programmatic playback.
+  narratorAudioElement.play().then(() => {
+    narratorAudioElement.pause();
+    audioUnlocked = true;
+    console.log('Audio element unlocked for playback.');
+  }).catch(error => {
+    // This can fail on desktop or if already unlocked, which is fine.
+    console.warn('Audio unlock failed, but this may not be an error:', error);
+  });
+}
 
 export function toggleNarrator(flag) {
-  if (currentAudio) { currentAudio.pause(); currentAudio = null; }
+  // On the first time the narrator is turned ON, unlock the audio element.
+  if (flag && !audioUnlocked) {
+    unlockAudio();
+  }
+
+  // If turning off, pause and clear any current audio.
+  if (!flag && narratorAudioElement) {
+    narratorAudioElement.pause();
+    narratorAudioElement.src = '';
+  }
+  
   narratorOn = flag;
 }
 
@@ -27,10 +58,16 @@ function splitIntoChunks(text, maxLen = 280) {
 
 /* ---------- public: narrate whole scene ---------- */
 export async function narrate(text) {
-  if (!narratorOn) return;
+  if (!narratorOn || !narratorAudioElement) return;
+
   for (const chunk of splitIntoChunks(text)) {
-    await streamChunk(chunk);       // wait until finished
-    if (!narratorOn) break;         // user toggled off
+    // Stop narrating if the user toggled it off mid-sentence
+    if (!narratorOn) {
+      narratorAudioElement.pause();
+      narratorAudioElement.src = '';
+      break;
+    }
+    await streamChunk(chunk); // Wait until this chunk has finished playing
   }
 }
 
@@ -53,55 +90,32 @@ async function streamChunk(chunk) {
   );
   if (!res.ok) throw new Error('TTS failed: ' + res.status);
 
-  // assemble streamed audio into a blob
-  let blob;
-  if (res.body && res.body.getReader) {
-    const reader = res.body.getReader();
-    const parts  = [];
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      parts.push(value);
-    }
-    blob = new Blob(parts, { type: 'audio/mpeg' });
-  } else {
-    blob = await res.blob();
+  // Assemble streamed audio into a blob
+  const reader = res.body.getReader();
+  const parts  = [];
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    parts.push(value);
   }
-  await playBlob(blob);
-}
+  const blob = new Blob(parts, { type: 'audio/mpeg' });
+  
+  // Use the persistent audio element to play the blob
+  const audioUrl = URL.createObjectURL(blob);
+  narratorAudioElement.src = audioUrl;
 
-async function playBlob(blob) {
-  // Safari sometimes fails to play from an Audio element created in JS.
-  // Using the Web Audio API when available improves mobile reliability.
-  if (window.AudioContext || window.webkitAudioContext) {
-    const AudioCtx = window.AudioContext || window.webkitAudioContext;
-    const ctx = new AudioCtx();
-    const buffer = await blob.arrayBuffer().then((b) => ctx.decodeAudioData(b));
-    await ctx.resume();
-    await new Promise((resolve) => {
-      const src = ctx.createBufferSource();
-      src.buffer = buffer;
-      src.connect(ctx.destination);
-      src.onended = resolve;
-      src.start();
-    });
-    ctx.close();
-  } else {
-    const audio = new Audio();
-    audio.src = URL.createObjectURL(blob);
-    audio.preload = 'auto';
-    audio.setAttribute('playsinline', '');
-    document.body.appendChild(audio);
-    await new Promise((resolve) => {
-      audio.onended = () => { audio.remove(); URL.revokeObjectURL(audio.src); resolve(); };
-      audio.onerror = () => { audio.remove(); URL.revokeObjectURL(audio.src); resolve(); };
-      currentAudio = audio;
-      const playPromise = audio.play();
-      if (playPromise !== undefined) {
-        playPromise.catch(() => resolve());
-      } else {
-        resolve();
-      }
-    });
-  }
+  // Play completely before returning (prevents overlaps)
+  await new Promise((resolve) => {
+    // When the audio finishes, release the object URL and resolve the promise
+    narratorAudioElement.onended = () => {
+      URL.revokeObjectURL(audioUrl);
+      resolve();
+    };
+    narratorAudioElement.onerror = () => {
+      console.error("Error playing audio chunk.");
+      URL.revokeObjectURL(audioUrl);
+      resolve(); // fail‑safe
+    };
+    narratorAudioElement.play();
+  });
 }
