@@ -91,6 +91,13 @@ narrBtn.addEventListener('click', () => {
         }
       }
 
+      function supportsSpeechRecognition() {
+        return (
+          'SpeechRecognition' in window ||
+          'webkitSpeechRecognition' in window
+        );
+      }
+
       // Prompt instruction builder
       function getPromptInstruction(userRequest) {
         return `You are an expert text-based adventure game master. Your goal is to create a dynamic, engaging, and imaginative story for a player named Chaim.\n\n` +
@@ -169,6 +176,41 @@ narrBtn.addEventListener('click', () => {
           console.error('Error generating image:', error);
           throw new Error('Failed to generate scene image.');
         }
+      }
+
+      function startVoiceChoice(scene, btn) {
+        const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRec) return;
+        const rec = new SpeechRec();
+        rec.lang = 'en-US';
+        rec.interimResults = false;
+        rec.onerror = (e) => {
+          console.error('Speech error:', e);
+          alert('Speech recognition error.');
+        };
+        rec.onresult = (e) => {
+          const transcript = e.results[0][0].transcript.toLowerCase();
+          let idx = -1;
+          if (transcript.includes('one') || transcript.includes('1')) idx = 0;
+          else if (transcript.includes('two') || transcript.includes('2')) idx = 1;
+          else if (transcript.includes('three') || transcript.includes('3')) idx = 2;
+          if (idx >= 0 && idx < scene.choices.length) {
+            handleChoice(scene.choices[idx].text);
+          } else {
+            alert(`Heard: "${transcript}". Please say one, two, or three.`);
+          }
+        };
+        rec.onend = () => {
+          if (btn) {
+            btn.disabled = false;
+            btn.textContent = '🎤 Speak Choice';
+          }
+        };
+        if (btn) {
+          btn.disabled = true;
+          btn.textContent = '🎧 Listening...';
+        }
+        rec.start();
       }
 
       // Render home screen
@@ -260,6 +302,12 @@ function renderScene(scene) {
     .replace(/\*\*(.*?)\*\*/g, '<strong class="text-yellow-300">$1</strong>')
     .replace(/\n/g, '<br/>');
 
+  const voiceHtml = supportsSpeechRecognition()
+    ? `<div class="flex justify-center">
+         <button id="voice-choice" class="mt-4 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-100 rounded-lg shadow-md">🎤 Speak Choice</button>
+       </div>`
+    : '';
+
   wrapper.innerHTML = `
     <div class="text-left text-gray-100 space-y-4">
       ${descriptionHtml}
@@ -284,6 +332,7 @@ function renderScene(scene) {
         )
         .join('')}
     </div>
+    ${voiceHtml}
   `;
 
 
@@ -297,6 +346,13 @@ function renderScene(scene) {
       await handleChoice(choice);
     });
   });
+
+  if (supportsSpeechRecognition()) {
+    const voiceBtn = wrapper.querySelector('#voice-choice');
+    if (voiceBtn) {
+      voiceBtn.addEventListener('click', () => startVoiceChoice(scene, voiceBtn));
+    }
+  }
 }
 
 
