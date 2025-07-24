@@ -67,21 +67,41 @@ async function streamChunk(chunk) {
   } else {
     blob = await res.blob();
   }
-  const audio = new Audio();
-  audio.src = URL.createObjectURL(blob);
-  audio.preload = 'auto';
-  audio.setAttribute('playsinline', '');
+  await playBlob(blob);
+}
 
-  // play completely before returning (prevents overlaps)
-  await new Promise((resolve) => {
-    audio.onended = () => { URL.revokeObjectURL(audio.src); resolve(); };
-    audio.onerror = () => { URL.revokeObjectURL(audio.src); resolve(); };
-    currentAudio  = audio;
-    const playPromise = audio.play();
-    if (playPromise !== undefined) {
-      playPromise.catch(() => resolve());
-    } else {
-      resolve();
-    }
-  });
+async function playBlob(blob) {
+  // Safari sometimes fails to play from an Audio element created in JS.
+  // Using the Web Audio API when available improves mobile reliability.
+  if (window.AudioContext || window.webkitAudioContext) {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    const ctx = new AudioCtx();
+    const buffer = await blob.arrayBuffer().then((b) => ctx.decodeAudioData(b));
+    await ctx.resume();
+    await new Promise((resolve) => {
+      const src = ctx.createBufferSource();
+      src.buffer = buffer;
+      src.connect(ctx.destination);
+      src.onended = resolve;
+      src.start();
+    });
+    ctx.close();
+  } else {
+    const audio = new Audio();
+    audio.src = URL.createObjectURL(blob);
+    audio.preload = 'auto';
+    audio.setAttribute('playsinline', '');
+    document.body.appendChild(audio);
+    await new Promise((resolve) => {
+      audio.onended = () => { audio.remove(); URL.revokeObjectURL(audio.src); resolve(); };
+      audio.onerror = () => { audio.remove(); URL.revokeObjectURL(audio.src); resolve(); };
+      currentAudio = audio;
+      const playPromise = audio.play();
+      if (playPromise !== undefined) {
+        playPromise.catch(() => resolve());
+      } else {
+        resolve();
+      }
+    });
+  }
 }
