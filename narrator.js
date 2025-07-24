@@ -1,6 +1,12 @@
 // narrator.js — ElevenLabs streamer
 const ELEVEN_KEY = 'sk_c2f8ed0d2ae4f0d0c3c8b119b96d569dc00d888cd1d1f3d8';   // your key
-const VOICE_ID   = 'EiNlNiXeDU1pqqOPrYMO';                                   // your chosen voice
+export const VOICE_OPTIONS = {
+  "Default": 'EiNlNiXeDU1pqqOPrYMO',
+  "Voice 2": 'MF3mGyEYCl7XYWbV9V6O',
+  "Voice 3": 'EXAVITQu4vr4xnSDxMaL'
+};
+
+let   VOICE_ID   = VOICE_OPTIONS["Default"];
 
 let narratorOn   = false;
 let currentAudio = null;
@@ -8,6 +14,10 @@ let currentAudio = null;
 export function toggleNarrator(flag) {
   if (currentAudio) { currentAudio.pause(); currentAudio = null; }
   narratorOn = flag;
+}
+
+export function setVoice(id) {
+  VOICE_ID = id;
 }
 
 /* ---------- helper: break long text into ≤280‑char chunks ---------- */
