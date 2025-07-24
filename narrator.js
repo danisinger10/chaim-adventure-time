@@ -70,12 +70,18 @@ async function streamChunk(chunk) {
   const audio = new Audio();
   audio.src = URL.createObjectURL(blob);
   audio.preload = 'auto';
+  audio.setAttribute('playsinline', '');
 
   // play completely before returning (prevents overlaps)
   await new Promise((resolve) => {
     audio.onended = () => { URL.revokeObjectURL(audio.src); resolve(); };
     audio.onerror = () => { URL.revokeObjectURL(audio.src); resolve(); };
     currentAudio  = audio;
-    audio.play().catch(() => resolve());
+    const playPromise = audio.play();
+    if (playPromise !== undefined) {
+      playPromise.catch(() => resolve());
+    } else {
+      resolve();
+    }
   });
 }
