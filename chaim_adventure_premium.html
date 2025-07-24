@@ -40,6 +40,21 @@ narrBtn.addEventListener('click', () => {
   const enabled = narrBtn.classList.toggle('bg-yellow-500');
   toggleNarrator(enabled);
 });
+// === Background music toggle ===
+const music = new Audio('https://cdn.pixabay.com/download/audio/2023/05/11/audio_74fb96cb80.mp3?filename=adventure-main-version-109197.mp3');
+music.loop = true;
+music.volume = 0.5;
+let musicOn = false;
+const musicBtn = document.createElement('button');
+musicBtn.textContent = '🎵 Music';
+musicBtn.className = 'fixed top-4 right-28 px-4 py-2 rounded-lg bg-yellow-700 text-gray-900 font-bold shadow-lg';
+document.body.appendChild(musicBtn);
+
+musicBtn.addEventListener('click', () => {
+  musicOn = !musicOn;
+  musicBtn.classList.toggle('bg-yellow-500', musicOn);
+  if (musicOn) { music.play(); } else { music.pause(); }
+});
 // === End toggle ===
 
       /*
@@ -73,6 +88,22 @@ narrBtn.addEventListener('click', () => {
 
       // History state for context
       let history = [];
+      let sceneCount = 0;
+
+      function saveProgress() {
+        const state = { history, sceneCount };
+        localStorage.setItem('chaimAdventureState', JSON.stringify(state));
+      }
+
+      function loadProgress() {
+        const stored = localStorage.getItem('chaimAdventureState');
+        if (!stored) return null;
+        try {
+          return JSON.parse(stored);
+        } catch (_) {
+          return null;
+        }
+      }
 
       // Detect if ReadableStream uploads are supported
       function supportsReadableStreamUploads() {
@@ -170,9 +201,11 @@ narrBtn.addEventListener('click', () => {
         app.innerHTML = '';
         const container = document.createElement('div');
         container.className = 'max-w-3xl w-full text-center flex flex-col items-center space-y-8';
+        const saved = loadProgress();
         container.innerHTML = `
           <h1 class="text-4xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-yellow-500 via-yellow-600 to-yellow-700 drop-shadow-xl">Chaim's Adventure</h1>
           <p class="text-gray-300 text-lg md:text-xl max-w-2xl mx-auto">Embark on an AI‑driven story tailored to Chaim’s quests. Choose a suggested adventure or craft your own theme.</p>
+          ${saved ? `<button id="resume" class="px-4 py-3 rounded-lg bg-gradient-to-r from-yellow-500 to-yellow-700 hover:from-yellow-400 hover:to-yellow-600 text-gray-900 font-semibold shadow-md transition-colors">Resume Last Adventure</button>` : ''}
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full max-w-2xl">
             ${suggestions.map((theme, idx) => `
               <button data-theme="${encodeURIComponent(theme)}" class="block px-4 py-4 rounded-lg bg-gradient-to-r from-yellow-600 to-yellow-800 hover:from-yellow-500 hover:to-yellow-700 text-gray-900 font-semibold shadow-md transition-colors focus:outline-none">
@@ -204,6 +237,29 @@ narrBtn.addEventListener('click', () => {
           history = [];
           await startGame(custom);
         });
+        const resumeBtn = container.querySelector('#resume');
+        if (resumeBtn) {
+          resumeBtn.addEventListener('click', async () => {
+            const saved = loadProgress();
+            if (!saved) return;
+            history = saved.history || [];
+            sceneCount = saved.sceneCount || 0;
+            if (history.length > 0) {
+              const last = history[history.length - 1];
+              if (last && last.role === 'model') {
+                try {
+                  const scene = parseGeminiResponse(last.parts[0].text);
+                  const imageBase64 = await generateImage(scene.imagePrompt);
+                  renderScene({ ...scene, imageBase64 });
+                  return;
+                } catch (e) {
+                  console.error('Failed to resume:', e);
+                }
+              }
+            }
+            renderHome();
+          });
+        }
       }
 
       // Render loading screen
@@ -249,6 +305,7 @@ function renderScene(scene) {
     .replace(/\n/g, '<br/>');
 
   wrapper.innerHTML = `
+    <div class="text-right text-yellow-400 font-bold">Scene ${sceneCount}</div>
     <div class="text-left text-gray-100 space-y-4">
       ${descriptionHtml}
     </div>
@@ -306,6 +363,8 @@ function renderScene(scene) {
             { role: 'user', parts: [{ text: userMessage }] },
             { role: 'model', parts: [{ text: response.text }] },
           ];
+          sceneCount = 1;
+          saveProgress();
           const scene = { ...geminiResponse, imageBase64 };
           renderScene(scene);
         } catch (err) {
@@ -340,6 +399,8 @@ function renderScene(scene) {
             { role: 'user', parts: [{ text: `Chaim chose: "${choice}"` }] },
             { role: 'model', parts: [{ text: response.text }] },
           ];
+          sceneCount += 1;
+          saveProgress();
           const scene = { ...geminiResponse, imageBase64 };
           renderScene(scene);
         } catch (err) {
