@@ -244,8 +244,11 @@ function renderScene(scene) {
   wrapper.className =
     'w-full max-w-3xl mx-auto bg-gray-800/70 p-6 md:p-8 rounded-lg border border-yellow-600 shadow-2xl space-y-6';
   
-  // Narrate original text before adding any HTML formatting
-  narrate(scene.description);
+  // Narrate plain text before adding any HTML formatting
+  const plainDesc = scene.description
+    .replace(/\*\*(.*?)\*\*/g, '$1')
+    .replace(/\n+/g, ' ');
+  narrate(plainDesc);
 
   const descriptionHtml = scene.description
     .replace(/\*\*(.*?)\*\*/g, '<strong class="text-yellow-300">$1</strong>')
