@@ -29,8 +29,14 @@
     </footer>
 
     <script type="module">
-      import { narrate, toggleNarrator } from './narrator.js';
-      // === Narrator toggle button ===
+        import { narrate, toggleNarrator, setElevenKey } from './narrator.js';
+
+        // Use provided environment key if available
+        if (window.ELEVEN_API_KEY) {
+          setElevenKey(window.ELEVEN_API_KEY);
+        }
+
+        // === Narrator toggle button ===
 const narrBtn = document.createElement('button');
 narrBtn.textContent = '🎙 Narrator';
 narrBtn.className = 'fixed top-4 right-4 px-4 py-2 rounded-lg bg-yellow-700 text-gray-900 font-bold shadow-lg';
