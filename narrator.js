@@ -1,5 +1,5 @@
 // narrator.js — ElevenLabs streamer
-let ELEVEN_KEY = localStorage.getItem('elevenlabs_key') || '';   // user key
+let ELEVEN_KEY = (window.ELEVEN_API_KEY || localStorage.getItem('elevenlabs_key') || '').trim();   // user key
 const VOICE_ID  = 'EiNlNiXeDU1pqqOPrYMO';                         // your chosen voice
 
 export function setElevenKey(key) {
@@ -10,6 +10,11 @@ export function setElevenKey(key) {
   } else {
     localStorage.removeItem('elevenlabs_key');
   }
+}
+
+// Automatically use the environment key when provided
+if (window.ELEVEN_API_KEY) {
+  setElevenKey(window.ELEVEN_API_KEY);
 }
 
 let narratorOn   = false;
