@@ -54,21 +54,54 @@ async function streamChunk(chunk) {
   if (!res.ok) throw new Error('TTS failed: ' + res.status);
 
   // assemble streamed audio into a blob
-  const reader = res.body.getReader();
-  const parts  = [];
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    parts.push(value);
+  let blob;
+  if (res.body && res.body.getReader) {
+    const reader = res.body.getReader();
+    const parts  = [];
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      parts.push(value);
+    }
+    blob = new Blob(parts, { type: 'audio/mpeg' });
+  } else {
+    blob = await res.blob();
   }
-  const blob  = new Blob(parts, { type: 'audio/mpeg' });
-  const audio = new Audio(URL.createObjectURL(blob));
+  await playBlob(blob);
+}
 
-  // play completely before returning (prevents overlaps)
-  await new Promise((resolve) => {
-    audio.onended = resolve;
-    audio.onerror = resolve;  // fail‑safe
-    currentAudio  = audio;
-    audio.play();
-  });
+async function playBlob(blob) {
+  // Safari sometimes fails to play from an Audio element created in JS.
+  // Using the Web Audio API when available improves mobile reliability.
+  if (window.AudioContext || window.webkitAudioContext) {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    const ctx = new AudioCtx();
+    const buffer = await blob.arrayBuffer().then((b) => ctx.decodeAudioData(b));
+    await ctx.resume();
+    await new Promise((resolve) => {
+      const src = ctx.createBufferSource();
+      src.buffer = buffer;
+      src.connect(ctx.destination);
+      src.onended = resolve;
+      src.start();
+    });
+    ctx.close();
+  } else {
+    const audio = new Audio();
+    audio.src = URL.createObjectURL(blob);
+    audio.preload = 'auto';
+    audio.setAttribute('playsinline', '');
+    document.body.appendChild(audio);
+    await new Promise((resolve) => {
+      audio.onended = () => { audio.remove(); URL.revokeObjectURL(audio.src); resolve(); };
+      audio.onerror = () => { audio.remove(); URL.revokeObjectURL(audio.src); resolve(); };
+      currentAudio = audio;
+      const playPromise = audio.play();
+      if (playPromise !== undefined) {
+        playPromise.catch(() => resolve());
+      } else {
+        resolve();
+      }
+    });
+  }
 }
