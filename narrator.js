@@ -10,6 +10,14 @@ export function toggleNarrator(flag) {
   narratorOn = flag;
 }
 
+export function setNarrator(flag) {
+  narratorOn = flag;
+}
+
+export function narratorState() {
+  return narratorOn;
+}
+
 /* ---------- helper: break long text into ≤280‑char chunks ---------- */
 function splitIntoChunks(text, maxLen = 280) {
   return text
