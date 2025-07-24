@@ -28,14 +28,19 @@ function splitIntoChunks(text, maxLen = 280) {
 /* ---------- public: narrate whole scene ---------- */
 export async function narrate(text) {
   if (!narratorOn) return;
-  for (const chunk of splitIntoChunks(text)) {
-    await streamChunk(chunk);       // wait until finished
-    if (!narratorOn) break;         // user toggled off
+  const chunks = splitIntoChunks(text);
+  let next = fetchAudio(chunks[0]);
+  for (let i = 0; i < chunks.length; i++) {
+    const audio = await next;
+    if (!narratorOn) break;
+    if (i + 1 < chunks.length) next = fetchAudio(chunks[i + 1]);
+    await playAudio(audio);
+    if (!narratorOn) break;
   }
 }
 
-/* ---------- private: stream one chunk ---------- */
-async function streamChunk(chunk) {
+/* ---------- private helpers ---------- */
+async function fetchAudio(chunk) {
   const res = await fetch(
     `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}/stream?optimize_streaming_latency=3`,
     {
@@ -62,9 +67,10 @@ async function streamChunk(chunk) {
     parts.push(value);
   }
   const blob  = new Blob(parts, { type: 'audio/mpeg' });
-  const audio = new Audio(URL.createObjectURL(blob));
+  return new Audio(URL.createObjectURL(blob));
+}
 
-  // play completely before returning (prevents overlaps)
+async function playAudio(audio) {
   await new Promise((resolve) => {
     audio.onended = resolve;
     audio.onerror = resolve;  // fail‑safe
