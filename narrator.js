@@ -67,13 +67,15 @@ async function streamChunk(chunk) {
   } else {
     blob = await res.blob();
   }
-  const audio = new Audio(URL.createObjectURL(blob));
+  const audio = new Audio();
+  audio.src = URL.createObjectURL(blob);
+  audio.preload = 'auto';
 
   // play completely before returning (prevents overlaps)
   await new Promise((resolve) => {
-    audio.onended = resolve;
-    audio.onerror = resolve;  // fail‑safe
+    audio.onended = () => { URL.revokeObjectURL(audio.src); resolve(); };
+    audio.onerror = () => { URL.revokeObjectURL(audio.src); resolve(); };
     currentAudio  = audio;
-    audio.play();
+    audio.play().catch(() => resolve());
   });
 }
