@@ -1,6 +1,6 @@
-// narrator.js  —  advanced ElevenLabs streaming
-const ELEVEN_KEY = 'sk_c2f8ed0d2ae4f0d0c3c8b119b96d569dc00d888cd1d1f3d8';   // YOUR key
-const VOICE_ID   = 'EXAVITQu4vr4xnSDxMaL';   // “Rachel” – swap if you prefer
+// narrator.js  —  ElevenLabs streamer
+const ELEVEN_KEY = 'sk_c2f8ed0d2ae4f0d0c3c8b119b96d569dc00d888cd1d1f3d8';   // ← your key
+const VOICE_ID   = 'EXAVITQu4vr4xnSDxMaL';       // swap voice if you want
 let narratorOn   = false;
 let currentAudio = null;
 
@@ -29,7 +29,6 @@ export async function narrate(text) {
   );
   if (!res.ok) throw new Error('ElevenLabs TTS failed');
 
-  // stream → Blob → play
   const reader = res.body.getReader();
   const chunks = [];
   while (true) {
