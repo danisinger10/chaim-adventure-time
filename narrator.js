@@ -4,8 +4,32 @@ const VOICE_ID   = 'EiNlNiXeDU1pqqOPrYMO';                                   // 
 
 let narratorOn   = false;
 let currentAudio = null;
+let audioUnlocked = false; // <<< NEW: Tracks if audio is unlocked
+
+/**
+ * NEW: Unlocks audio playback on mobile browsers.
+ * This function should be called from within a user-initiated event (e.g., a click).
+ * It plays a tiny silent audio clip, which "primes" the browser to allow
+ * subsequent programmatic audio playback.
+ */
+function unlockAudioForMobile() {
+  if (audioUnlocked) return;
+  const silentAudio = new Audio(
+    'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA='
+  );
+  silentAudio.volume = 0;
+  silentAudio.play().catch(() => {
+    // Errors are expected on desktop and where not needed; we can ignore them.
+  });
+  audioUnlocked = true;
+}
 
 export function toggleNarrator(flag) {
+  // <<< MODIFIED: Unlock audio on the first time the narrator is enabled.
+  if (flag && !audioUnlocked) {
+    unlockAudioForMobile();
+  }
+
   if (currentAudio) { currentAudio.pause(); currentAudio = null; }
   narratorOn = flag;
 }
