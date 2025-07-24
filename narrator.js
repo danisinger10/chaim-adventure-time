@@ -1,6 +1,6 @@
 // narrator.js  —  ElevenLabs streamer
 const ELEVEN_KEY = 'sk_c2f8ed0d2ae4f0d0c3c8b119b96d569dc00d888cd1d1f3d8';   // ← your key
-const VOICE_ID   = 'EXAVITQu4vr4xnSDxMaL';       // swap voice if you want
+const VOICE_ID   = 'EiNlNiXeDU1pqqOPrYMO';       // swap voice if you want
 let narratorOn   = false;
 let currentAudio = null;
 
