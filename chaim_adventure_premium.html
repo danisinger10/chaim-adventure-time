@@ -42,6 +42,14 @@ narrBtn.addEventListener('click', () => {
 });
 // === End toggle ===
 
+// === Story log button ===
+const logBtn = document.createElement('button');
+logBtn.textContent = '📝 Log';
+logBtn.className = 'fixed top-4 left-4 px-4 py-2 rounded-lg bg-yellow-700 text-gray-900 font-bold shadow-lg';
+document.body.appendChild(logBtn);
+logBtn.addEventListener('click', showLog);
+// === End log button ===
+
       /*
        * Chaim's Adventure v2 (Mobile Fix + UI upgrade)
        *
@@ -73,6 +81,10 @@ narrBtn.addEventListener('click', () => {
 
       // History state for context
       let history = [];
+      // Accumulated scene descriptions for the log
+      let log = [];
+      // Handler for keyboard shortcuts
+      let keyHandler = null;
 
       // Detect if ReadableStream uploads are supported
       function supportsReadableStreamUploads() {
@@ -165,14 +177,60 @@ narrBtn.addEventListener('click', () => {
         }
       }
 
+      // ---------- persistence & log helpers ----------
+      function saveProgress(scene) {
+        try {
+          localStorage.setItem('chaimAdventureSave', JSON.stringify({ history, log, scene }));
+        } catch (e) {
+          console.warn('Failed to save progress', e);
+        }
+      }
+
+      function loadProgress() {
+        try {
+          const data = JSON.parse(localStorage.getItem('chaimAdventureSave'));
+          if (data && data.history && data.scene) {
+            history = data.history;
+            log = data.log || [];
+            renderScene(data.scene);
+            return true;
+          }
+        } catch (e) {
+          console.warn('Failed to load saved progress', e);
+        }
+        return false;
+      }
+
+      function showLog() {
+        if (log.length === 0) {
+          alert('No story history yet.');
+          return;
+        }
+        const overlay = document.createElement('div');
+        overlay.className = 'fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4';
+        overlay.innerHTML = `
+          <div class="bg-gray-800 p-6 rounded-lg max-w-2xl w-full space-y-4 overflow-y-auto max-h-full">
+            <h2 class="text-2xl font-bold text-yellow-400 mb-2">Story So Far</h2>
+            <div class="space-y-4">
+              ${log.map(p => `<p class="text-gray-100">${p.replace(/\n/g, '<br/>')}</p>`).join('<hr class="border-yellow-600"/>')}
+            </div>
+            <button class="mt-4 px-4 py-2 bg-gradient-to-r from-yellow-500 to-yellow-700 text-gray-900 font-semibold rounded-lg shadow-md">Close</button>
+          </div>
+        `;
+        overlay.querySelector('button')?.addEventListener('click', () => overlay.remove());
+        document.body.appendChild(overlay);
+      }
+
       // Render home screen
       function renderHome() {
         app.innerHTML = '';
         const container = document.createElement('div');
         container.className = 'max-w-3xl w-full text-center flex flex-col items-center space-y-8';
+        const hasSave = localStorage.getItem('chaimAdventureSave');
         container.innerHTML = `
           <h1 class="text-4xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-yellow-500 via-yellow-600 to-yellow-700 drop-shadow-xl">Chaim's Adventure</h1>
           <p class="text-gray-300 text-lg md:text-xl max-w-2xl mx-auto">Embark on an AI‑driven story tailored to Chaim’s quests. Choose a suggested adventure or craft your own theme.</p>
+          ${hasSave ? `<button id="resume" class="w-full max-w-2xl px-4 py-3 rounded-lg bg-gradient-to-r from-yellow-500 to-yellow-700 hover:from-yellow-400 hover:to-yellow-600 text-gray-900 font-semibold shadow-md transition-colors focus:outline-none mb-4">Resume Adventure</button>` : ''}
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full max-w-2xl">
             ${suggestions.map((theme, idx) => `
               <button data-theme="${encodeURIComponent(theme)}" class="block px-4 py-4 rounded-lg bg-gradient-to-r from-yellow-600 to-yellow-800 hover:from-yellow-500 hover:to-yellow-700 text-gray-900 font-semibold shadow-md transition-colors focus:outline-none">
@@ -186,11 +244,18 @@ narrBtn.addEventListener('click', () => {
           </div>
         `;
         app.appendChild(container);
+        if (hasSave) {
+          container.querySelector('#resume').addEventListener('click', () => {
+            loadProgress();
+          });
+        }
         // Attach event listeners for suggested themes
         container.querySelectorAll('button[data-theme]').forEach(btn => {
           btn.addEventListener('click', async (e) => {
             const theme = decodeURIComponent(e.currentTarget.getAttribute('data-theme'));
             history = [];
+            log = [];
+            localStorage.removeItem('chaimAdventureSave');
             await startGame(theme);
           });
         });
@@ -202,6 +267,8 @@ narrBtn.addEventListener('click', () => {
             return;
           }
           history = [];
+          log = [];
+          localStorage.removeItem('chaimAdventureSave');
           await startGame(custom);
         });
       }
@@ -281,6 +348,21 @@ function renderScene(scene) {
   narrate(plainText);
   /* --------------------------------------------------- */
 
+  // add description to log and persist
+  log.push(scene.description);
+  saveProgress(scene);
+
+  // setup keyboard shortcuts
+  if (keyHandler) document.removeEventListener('keydown', keyHandler);
+  keyHandler = (e) => {
+    if (['1', '2', '3'].includes(e.key)) {
+      const idx = parseInt(e.key, 10) - 1;
+      const btn = wrapper.querySelector(`button[data-idx="${idx}"]`);
+      if (btn) btn.click();
+    }
+  };
+  document.addEventListener('keydown', keyHandler);
+
   app.appendChild(wrapper);
 
   wrapper.querySelectorAll('button[data-idx]').forEach((btn) => {
@@ -307,6 +389,8 @@ function renderScene(scene) {
             { role: 'model', parts: [{ text: response.text }] },
           ];
           const scene = { ...geminiResponse, imageBase64 };
+          log = [geminiResponse.description];
+          saveProgress(scene);
           renderScene(scene);
         } catch (err) {
           console.error(err);
@@ -341,6 +425,8 @@ function renderScene(scene) {
             { role: 'model', parts: [{ text: response.text }] },
           ];
           const scene = { ...geminiResponse, imageBase64 };
+          log.push(geminiResponse.description);
+          saveProgress(scene);
           renderScene(scene);
         } catch (err) {
           console.error(err);
