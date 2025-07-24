@@ -38,6 +38,13 @@ document.body.appendChild(narrBtn);
 
 narrBtn.addEventListener('click', () => {
   const enabled = narrBtn.classList.toggle('bg-yellow-500');
+  if (enabled) {
+    narrBtn.classList.add('animate-pulse');
+    narrBtn.textContent = '🎙 Narrator ON';
+  } else {
+    narrBtn.classList.remove('animate-pulse');
+    narrBtn.textContent = '🎙 Narrator';
+  }
   toggleNarrator(enabled);
 });
 // === End toggle ===
@@ -68,6 +75,13 @@ narrBtn.addEventListener('click', () => {
         "Chaim on a daring space mission to rescue his stranded crew"
       ];
 
+      // Gameplay state
+      let chaimStrength = 100;
+      let chaimInventory = [];
+      let adventureLog = [];
+      let nextRandomEvent = '';
+      let timerId = null;
+
       // UI root
       const app = document.getElementById('app');
 
@@ -86,8 +100,8 @@ narrBtn.addEventListener('click', () => {
       }
 
       // Prompt instruction builder
-      function getPromptInstruction(userRequest) {
-        return `You are an expert text-based adventure game master. Your goal is to craft a gripping, grounded adventure that keeps Chaim on the edge of his seat.\n\n` +
+      function getPromptInstruction(userRequest, isMajor = false) {
+        let base = `You are an expert text-based adventure game master. Your goal is to craft a gripping, grounded adventure that keeps Chaim on the edge of his seat.\n\n` +
           `- The player character's name is ALWAYS Chaim. Refer to the player as Chaim in the story.\n` +
           `- Keep the narrative thrilling yet plausible, with real stakes and suspense.\n` +
           `- Your entire response MUST be a single, valid JSON object and nothing else. Do not wrap it in markdown.\n\n` +
@@ -101,7 +115,17 @@ narrBtn.addEventListener('click', () => {
           `    { "text": "A short, actionable phrase for a third choice." }\n` +
           `  ]\n` +
           `}\n\n` +
-          `Now, fulfill this request for Chaim:\n${userRequest}`;
+          `- Optionally a choice may include \\"weight\\": \\"major\\" to signal a decision with long-term consequences.\n` +
+          `- If relevant, provide a \\"foundItem\\" field when Chaim acquires something.\n` +
+          `- If new NPC relationships change, include a \\"relationshipChanges\\" array summarising them.\n\n`;
+
+        if (chaimInventory.length > 0) {
+          base += `Chaim currently possesses: ${chaimInventory.join(', ')}\n`;
+        }
+        if (isMajor) {
+          base += 'The last choice was major and should branch the story in a meaningful way.\n';
+        }
+        return base + `\nNow, fulfill this request for Chaim:\n${userRequest}`;
       }
 
       function parseGeminiResponse(responseText) {
@@ -118,6 +142,9 @@ narrBtn.addEventListener('click', () => {
         }
         if (!parsed.description || !parsed.imagePrompt || !Array.isArray(parsed.choices)) {
           throw new Error('Invalid JSON structure from Gemini.');
+        }
+        if (parsed.foundItem) {
+          chaimInventory.push(parsed.foundItem);
         }
         return parsed;
       }
@@ -171,11 +198,17 @@ narrBtn.addEventListener('click', () => {
         app.innerHTML = '';
         const container = document.createElement('div');
         container.className = 'max-w-3xl w-full text-center flex flex-col items-center space-y-8';
+
+        const available = [...suggestions];
+        if (chaimStrength > 120) {
+          available.push('Chaim masters an ancient martial art');
+        }
+
         container.innerHTML = `
           <h1 class="text-4xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-yellow-500 via-yellow-600 to-yellow-700 drop-shadow-xl">Chaim's Adventure</h1>
           <p class="text-gray-300 text-lg md:text-xl max-w-2xl mx-auto">Embark on an AI‑driven story tailored to Chaim’s quests. Choose a suggested adventure or craft your own theme.</p>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full max-w-2xl">
-            ${suggestions.map((theme, idx) => `
+            ${available.map((theme, idx) => `
               <button data-theme="${encodeURIComponent(theme)}" class="block px-4 py-4 rounded-lg bg-gradient-to-r from-yellow-600 to-yellow-800 hover:from-yellow-500 hover:to-yellow-700 text-gray-900 font-semibold shadow-md transition-colors focus:outline-none">
                 ${theme}
               </button>
@@ -208,7 +241,16 @@ narrBtn.addEventListener('click', () => {
       }
 
       // Render loading screen
-      function renderLoading(message = 'Generating your adventure...') {
+      const LOADING_MESSAGES = [
+        'Consulting ancient scrolls...',
+        "Polishing Chaim's armor...",
+        'Summoning adventure spirits...'
+      ];
+
+      function renderLoading(message = '') {
+        if (!message) {
+          message = LOADING_MESSAGES[Math.floor(Math.random() * LOADING_MESSAGES.length)];
+        }
         app.innerHTML = '';
         const loading = document.createElement('div');
         loading.className = 'text-center flex flex-col items-center space-y-4';
@@ -234,6 +276,20 @@ narrBtn.addEventListener('click', () => {
         `;
         app.appendChild(err);
         err.querySelector('#restart').addEventListener('click', () => {
+          renderHome();
+        });
+      }
+
+      function renderPuzzleScreen() {
+        app.innerHTML = '';
+        const p = document.createElement('div');
+        p.className = 'text-center space-y-4';
+        p.innerHTML = `
+          <p class="text-xl">A puzzle awaits!</p>
+          <button id="back-home" class="px-4 py-2 bg-yellow-600 rounded-lg text-gray-900 font-semibold">Return Home</button>
+        `;
+        app.appendChild(p);
+        p.querySelector('#back-home').addEventListener('click', () => {
           renderHome();
         });
       }
@@ -273,6 +329,8 @@ function renderScene(scene) {
         )
         .join('')}
     </div>
+    <button id="toggle-log" class="text-sm text-yellow-400 underline">Adventure Log</button>
+    <div id="log-panel" class="hidden text-left text-sm bg-gray-700/70 p-4 rounded-lg max-h-60 overflow-y-auto space-y-2"></div>
   `;
 
   /* ---------- send clean text to ElevenLabs ---------- */
@@ -284,12 +342,36 @@ function renderScene(scene) {
 
   app.appendChild(wrapper);
 
+  if (timerId) clearInterval(timerId);
+  let timeLeft = 30;
+  const timerEl = document.createElement('div');
+  timerEl.className = 'text-right text-yellow-400 font-mono';
+  timerEl.textContent = `Time left: ${timeLeft}`;
+  wrapper.prepend(timerEl);
+  timerId = setInterval(() => {
+    timeLeft -= 1;
+    if (timeLeft <= 0) {
+      clearInterval(timerId);
+      renderError('Time ran out! Chaim hesitated too long.');
+    } else {
+      timerEl.textContent = `Time left: ${timeLeft}`;
+    }
+  }, 1000);
+
   wrapper.querySelectorAll('button[data-idx]').forEach((btn) => {
     btn.addEventListener('click', async (e) => {
       const index  = parseInt(e.currentTarget.getAttribute('data-idx'), 10);
       const choice = scene.choices[index].text;
+      clearInterval(timerId);
       await handleChoice(choice);
     });
+  });
+
+  const logBtn = wrapper.querySelector('#toggle-log');
+  const logPanel = wrapper.querySelector('#log-panel');
+  logPanel.innerHTML = adventureLog.map(d => `<p>${d}</p>`).join('<hr class="border-yellow-600 my-1"/>');
+  logBtn.addEventListener('click', () => {
+    logPanel.classList.toggle('hidden');
   });
 }
 
@@ -303,15 +385,26 @@ function renderScene(scene) {
           const response = await generateContentSafe('gemini-2.5-flash', fullPrompt);
           const geminiResponse = parseGeminiResponse(response.text);
           const imageBase64 = await generateImage(geminiResponse.imagePrompt);
+          chaimStrength = 100;
+          chaimInventory = [];
+          adventureLog = [];
+          nextRandomEvent = '';
           history = [
             { role: 'user', parts: [{ text: userMessage }] },
             { role: 'model', parts: [{ text: response.text }] },
           ];
+          adventureLog.push(geminiResponse.description);
           const scene = { ...geminiResponse, imageBase64 };
           renderScene(scene);
         } catch (err) {
           console.error(err);
-          renderError(err instanceof Error ? err.message : String(err));
+          let msg = err instanceof Error ? err.message : String(err);
+          if (msg.includes('Image generation failed')) {
+            msg = 'Failed to create scene image. Please try again.';
+          } else if (msg.includes('Gemini API returned no content')) {
+            msg = "The story took an unexpected turn and Gemini couldn't continue. Let's try a different path.";
+          }
+          renderError(msg);
         }
       }
 
@@ -324,18 +417,48 @@ function renderScene(scene) {
             const lastModelTurn = history[history.length - 1];
             if (lastModelTurn && lastModelTurn.role === 'model') {
               try {
-                const lastResponse = parseGeminiResponse(lastModelTurn.parts[0].text);
+                const raw = lastModelTurn.parts[0].text.replace(/^```json/, '').replace(/```$/, '').trim();
+                const lastResponse = JSON.parse(raw);
                 storyContext = `The story so far: ${lastResponse.description}\n\n`;
               } catch (e) {
                 console.warn('Could not parse last model turn for context.', e);
               }
             }
           }
-          const userRequest = `${storyContext}Chaim's next action is: "${choice}". What happens now?`;
-          const fullPrompt = getPromptInstruction(userRequest);
+          let lastScene = null;
+          if (history.length > 0) {
+            const raw = history[history.length - 1].parts[0].text.replace(/^```json/, '').replace(/```$/, '').trim();
+            try { lastScene = JSON.parse(raw); } catch {}
+          }
+          const weight = lastScene && lastScene.choices ? (lastScene.choices.find(c => c.text === choice) || {}).weight : null;
+
+          const userRequest = `${storyContext}Chaim's next action is: "${choice}". ${nextRandomEvent}What happens now?`;
+          const fullPrompt = getPromptInstruction(userRequest, weight === 'major');
+          nextRandomEvent = Math.random() < 0.1 ? 'Suddenly, a flock of angry birds attacks! ' : '';
           const response = await generateContentSafe('gemini-2.5-flash', fullPrompt);
           const geminiResponse = parseGeminiResponse(response.text);
+          if (geminiResponse.puzzleType === 'riddle') {
+            renderPuzzleScreen();
+            return;
+          }
           const imageBase64 = await generateImage(geminiResponse.imagePrompt);
+
+          const descLower = geminiResponse.description.toLowerCase();
+          const positive = /(success|victorious|triumph|wins|accomplish|find)/.test(descLower);
+          const negative = /(fail|lost|injured|defeated|danger)/.test(descLower);
+          const delta = Math.floor(Math.random() * 6) + 5; // 5-10
+          if (positive) {
+            chaimStrength += delta;
+          } else if (negative) {
+            chaimStrength -= delta;
+          } else {
+            chaimStrength += Math.random() < 0.5 ? delta : -delta;
+          }
+
+          adventureLog.push(geminiResponse.description);
+          if (/legendary artifact|epic victory/i.test(geminiResponse.description)) {
+            console.log('Achievement Unlocked: Epic Milestone!');
+          }
           history = [
             ...history,
             { role: 'user', parts: [{ text: `Chaim chose: "${choice}"` }] },
@@ -345,7 +468,13 @@ function renderScene(scene) {
           renderScene(scene);
         } catch (err) {
           console.error(err);
-          renderError(err instanceof Error ? err.message : String(err));
+          let msg = err instanceof Error ? err.message : String(err);
+          if (msg.includes('Image generation failed')) {
+            msg = 'Failed to create scene image. Please try again.';
+          } else if (msg.includes('Gemini API returned no content')) {
+            msg = "The story took an unexpected turn and Gemini couldn't continue. Let's try a different path.";
+          }
+          renderError(msg);
         }
       }
 
