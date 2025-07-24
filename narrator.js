@@ -58,7 +58,6 @@ async function streamChunk(chunk) {
   }
   const blob = new Blob(chunks, { type: 'audio/mpeg' });
   const audio = new Audio(URL.createObjectURL(blob));
-  const audio = new Audio(URL.createObjectURL(blob));
   await new Promise((resolve) => {
     audio.onended = resolve;
     audio.onerror = resolve;       // fail‑safe
