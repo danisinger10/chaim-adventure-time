@@ -353,5 +353,15 @@ function renderScene(scene) {
       renderHome();
     </script>
     <audio id="narrator-audio-element" style="display: none;"></audio>
+    <!-- …your existing content… -->
+
+<button onclick="toggleNarrator(true)">Narrator ON</button>
+<button onclick="toggleNarrator(false)">Narrator OFF</button>
+<button onclick="narrate('You turn the corner and see a dragon…')">Speak</button>
+
+<audio id="narrator-audio-element" preload="auto"></audio>
+
+</body>
+
   </body>
 </html>
