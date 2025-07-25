@@ -46,6 +46,18 @@
         toggleNarrator(enabled);
       });
 
+      // Unlock audio on any user interaction for mobile browsers
+      function earlyAudioUnlock() {
+        const audioEl = document.getElementById('narrator-audio-element');
+        if (audioEl) {
+          audioEl.volume = 0;
+          audioEl.play().catch(() => {}); // Ignore errors
+        }
+      }
+
+      document.addEventListener('touchstart', earlyAudioUnlock, { once: true });
+      document.addEventListener('click', earlyAudioUnlock, { once: true });
+
       /* optional speak‑test button (remove in prod) */
       const speakBtn = document.createElement('button');
       speakBtn.textContent = '🔊 Speak test';
@@ -58,7 +70,7 @@
       /* --------------------------------------- */
 
       /* -------------- Gemini setup ------------ */
-      const apiKey = import.meta.env?.VITE_GEMINI_KEY || window.VITE_GEMINI_KEY;
+      const apiKey = 'AIzaSyBOMarZfaw9O5v5ncQjocSRQ-G2I55Onb8';
       let   ai;
       function getAI() {
         if (!ai) {
