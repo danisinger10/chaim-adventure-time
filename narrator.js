@@ -1,63 +1,44 @@
-// narrator.js — ElevenLabs streamer (client‑side version)
-const ELEVEN_KEY = import.meta.env?.VITE_ELEVEN_KEY || window.VITE_ELEVEN_KEY;
-const VOICE_ID   = 'EiNlNiXeDU1pqqOPrYMO';
+// narrator.js — ElevenLabs streamer
+const ELEVEN_KEY = 'sk_c2f8ed0d2ae4f0d0c3c8b119b96d569dc00d888cd1d1f3d8';   // your key
+const VOICE_ID   = 'EiNlNiXeDU1pqqOPrYMO';                                   // your chosen voice
 
-let narratorOn    = false;
-let audioUnlocked = false;
+let narratorOn   = false;
+let currentAudio = null;
+let audioUnlocked = false; // <<< NEW: Tracks if audio is unlocked
 
-// persistent <audio> element in your HTML
-// <audio id="narrator‑audio-element" preload="auto"></audio>
-const narratorAudioElement = document.getElementById('narrator-audio-element');
-
-/* ---------- mobile‑audio unlock ---------- */
+/**
+ * NEW: Unlocks audio playback on mobile browsers.
+ * This function should be called from within a user-initiated event (e.g., a click).
+ * It plays a tiny silent audio clip, which "primes" the browser to allow
+ * subsequent programmatic audio playback.
+ */
 function unlockAudioForMobile() {
   if (audioUnlocked) return;
-
   const silentAudio = new Audio(
-    // 44‑byte silent WAV (1‑sample)
     'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA='
   );
   silentAudio.volume = 0;
-  silentAudio.play().catch(() => { /* desktop browsers may reject – ignore */ });
+  silentAudio.play().catch(() => {
+    // Errors are expected on desktop and where not needed; we can ignore them.
+  });
   audioUnlocked = true;
 }
 
-/* ---------- public API ---------- */
 export function toggleNarrator(flag) {
-  if (flag && !audioUnlocked) unlockAudioForMobile();   // first time ON → unlock
-  if (!flag && narratorAudioElement) {
-    narratorAudioElement.pause();
-    narratorAudioElement.src = '';
+  // <<< MODIFIED: Unlock audio on the first time the narrator is enabled.
+  if (flag && !audioUnlocked) {
+    unlockAudioForMobile();
   }
-  narratorOn = !!flag;
+
+  if (currentAudio) { currentAudio.pause(); currentAudio = null; }
+  narratorOn = flag;
 }
 
-export async function narrate(text) {
-  if (!narratorOn || !narratorAudioElement) return;
-  if (!ELEVEN_KEY) {
-    console.warn('ElevenLabs API key missing.');
-    return;
-  }
-  if (!audioUnlocked) unlockAudioForMobile();           // belt‑and‑suspenders
-
-  for (const chunk of splitIntoChunks(text)) {
-    if (!narratorOn) break;                             // user toggled off mid‑story
-    try {
-      await streamChunk(chunk);
-    } catch (err) {
-      console.error('TTS error:', err);
-      break;
-    }
-  }
-
-  narratorAudioElement.src = '';                        // cleanup
-}
-
-/* ---------- helpers ---------- */
+/* ---------- helper: break long text into ≤280‑char chunks ---------- */
 function splitIntoChunks(text, maxLen = 280) {
   return text
     .replace(/\s+/g, ' ')
-    .split(/(?<=[.!?])\s+/)               // sentence boundaries
+    .split(/(?<=[.!?])\s+/)      // sentence boundaries
     .reduce((chunks, sent) => {
       if (!chunks.length || (chunks.at(-1) + sent).length > maxLen) {
         chunks.push(sent);
@@ -68,6 +49,16 @@ function splitIntoChunks(text, maxLen = 280) {
     }, []);
 }
 
+/* ---------- public: narrate whole scene ---------- */
+export async function narrate(text) {
+  if (!narratorOn) return;
+  for (const chunk of splitIntoChunks(text)) {
+    await streamChunk(chunk);       // wait until finished
+    if (!narratorOn) break;         // user toggled off
+  }
+}
+
+/* ---------- private: stream one chunk ---------- */
 async function streamChunk(chunk) {
   const res = await fetch(
     `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}/stream?optimize_streaming_latency=3`,
@@ -86,7 +77,7 @@ async function streamChunk(chunk) {
   );
   if (!res.ok) throw new Error('TTS failed: ' + res.status);
 
-  // accumulate streamed MP3 bytes
+  // assemble streamed audio into a blob
   const reader = res.body.getReader();
   const parts  = [];
   while (true) {
@@ -94,19 +85,14 @@ async function streamChunk(chunk) {
     if (done) break;
     parts.push(value);
   }
-  const blob     = new Blob(parts, { type: 'audio/mpeg' });
-  const audioUrl = URL.createObjectURL(blob);
+  const blob  = new Blob(parts, { type: 'audio/mpeg' });
+  const audio = new Audio(URL.createObjectURL(blob));
 
-  narratorAudioElement.src = audioUrl;
-  await new Promise(resolve => {
-    narratorAudioElement.onended = narratorAudioElement.onerror = () => {
-      URL.revokeObjectURL(audioUrl);
-      resolve();
-    };
-    narratorAudioElement.play().catch(err => {
-      console.error('Playback error:', err);
-      URL.revokeObjectURL(audioUrl);
-      resolve();
-    });
+  // play completely before returning (prevents overlaps)
+  await new Promise((resolve) => {
+    audio.onended = resolve;
+    audio.onerror = resolve;  // fail‑safe
+    currentAudio  = audio;
+    audio.play();
   });
 }
