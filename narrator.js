@@ -60,39 +60,58 @@ export async function narrate(text) {
 
 /* ---------- private: stream one chunk ---------- */
 async function streamChunk(chunk) {
-  const res = await fetch(
-    `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}/stream?optimize_streaming_latency=3`,
-    {
-      method : 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'xi-api-key'  : ELEVEN_KEY
-      },
-      body: JSON.stringify({
-        text          : chunk,
-        model_id      : 'eleven_multilingual_v2',
-        voice_settings: { stability: 0.70, similarity_boost: 0.65 }
-      })
+  try {
+    // Use maximum streaming optimization for faster response
+    const res = await fetch(
+      `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}/stream?optimize_streaming_latency=4`,
+      {
+        method : 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'xi-api-key'  : ELEVEN_KEY
+        },
+        body: JSON.stringify({
+          text          : chunk,
+          model_id      : 'eleven_multilingual_v2',
+          voice_settings: { stability: 0.65, similarity_boost: 0.60 } // Faster settings
+        })
+      }
+    );
+    if (!res.ok) throw new Error('TTS failed: ' + res.status);
+
+    // assemble streamed audio into a blob
+    const reader = res.body.getReader();
+    const parts  = [];
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      parts.push(value);
     }
-  );
-  if (!res.ok) throw new Error('TTS failed: ' + res.status);
+    const blob  = new Blob(parts, { type: 'audio/mpeg' });
+    const audio = new Audio(URL.createObjectURL(blob));
 
-  // assemble streamed audio into a blob
-  const reader = res.body.getReader();
-  const parts  = [];
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    parts.push(value);
+    // play completely before returning (prevents overlaps)
+    await new Promise((resolve) => {
+      const cleanup = () => {
+        URL.revokeObjectURL(audio.src); // Clean up blob URL
+        resolve();
+      };
+      
+      audio.onended = cleanup;
+      audio.onerror = cleanup;  // fail‑safe
+      currentAudio  = audio;
+      
+      // Enhanced error handling for mobile browsers
+      const playPromise = audio.play();
+      if (playPromise) {
+        playPromise.catch((error) => {
+          console.warn('Audio play failed:', error);
+          cleanup();
+        });
+      }
+    });
+  } catch (error) {
+    console.error('TTS streaming error:', error);
+    // Continue to next chunk even if this one fails
   }
-  const blob  = new Blob(parts, { type: 'audio/mpeg' });
-  const audio = new Audio(URL.createObjectURL(blob));
-
-  // play completely before returning (prevents overlaps)
-  await new Promise((resolve) => {
-    audio.onended = resolve;
-    audio.onerror = resolve;  // fail‑safe
-    currentAudio  = audio;
-    audio.play();
-  });
 }
