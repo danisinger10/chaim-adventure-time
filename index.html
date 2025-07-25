@@ -90,7 +90,8 @@
           Wits: 5,
           Charisma: 5
         },
-        inventory: []
+        inventory: [],
+        worldHistory: null
       };
 
       /* ------------ helpers & UI ------------- */
@@ -163,6 +164,36 @@
         }
       }
 
+      async function runGenesisEngine() {
+        const saved = localStorage.getItem('worldHistory');
+        if (saved) {
+          playerState.worldHistory = JSON.parse(saved);
+          return;
+        }
+        renderLoading("Forging the world's mythology…");
+        const genesisPrompt =
+          'Generate a detailed creation myth, two fallen empires with conflicting ideologies, ' +
+          'one cataclysmic event that reshaped the world, and three legendary artifacts. ' +
+          'For each artifact include name, origin, and rumored powers. ' +
+          'Return a JSON object with keys: creationMyth, empires, cataclysm, artifacts.';
+        try {
+          const resp  = await generateContentSafe('gemini-2.5-flash', genesisPrompt);
+          const clean = resp.text.replace(/^```json/, '').replace(/```$/, '').trim();
+          const data  = JSON.parse(clean);
+          playerState.worldHistory = data;
+          localStorage.setItem('worldHistory', JSON.stringify(data));
+        } catch (err) {
+          console.error('Genesis Engine failed:', err);
+          playerState.worldHistory = null;
+        }
+      }
+
+      function resetWorld() {
+        localStorage.removeItem('worldHistory');
+        playerState.worldHistory = null;
+        renderHome();
+      }
+
       /* -------------- UI screens -------------- */
       function renderLoading(msg='Generating your adventure…') {
         app.innerHTML =
@@ -188,6 +219,10 @@
       }
 
       function renderHome() {
+        const resetBtn = playerState.worldHistory
+          ? `<button id="reset-world"
+               class="px-4 py-2 bg-yellow-800 text-gray-100 rounded-lg">New World</button>`
+          : '';
         app.innerHTML =
           `<div class="max-w-3xl mx-auto text-center space-y-8">
              <h1 class="text-4xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-yellow-500 via-yellow-600 to-yellow-700 drop-shadow-xl">
@@ -208,6 +243,7 @@
                <button id="start-custom"
                  class="w-full px-4 py-3 rounded-lg bg-gradient-to-r from-yellow-500 to-yellow-700 text-gray-900 font-semibold">
                  Start Custom Adventure</button>
+               ${resetBtn}
              </div>
            </div>`;
 
@@ -219,6 +255,8 @@
           if (!custom) return alert('Enter a theme or pick one.');
           startGame(custom);
         };
+        const reset = document.getElementById('reset-world');
+        if (reset) reset.onclick = resetWorld;
       }
 
       function renderScene(scene) {
@@ -268,13 +306,15 @@
       /* -------------- game flow --------------- */
       async function startGame(theme) {
         try {
+          await runGenesisEngine();
           renderLoading();
           // reset player state
           playerState.stats = { Strength:5, Agility:5, Wits:5, Charisma:5 };
           playerState.inventory = [];
 
           const stateIntro = `Chaim's stats are: STR ${playerState.stats.Strength}, AGI ${playerState.stats.Agility}, WIT ${playerState.stats.Wits}, CHA ${playerState.stats.Charisma}. Inventory: none.`;
-          const prompt = getPromptInstruction(`${stateIntro}\nStart a new adventure for Chaim with the theme: \"${theme}\"`);
+          const loreCtx = playerState.worldHistory ? `World lore: ${JSON.stringify(playerState.worldHistory)}.` : '';
+          const prompt = getPromptInstruction(`${loreCtx} ${stateIntro}\nStart a new adventure for Chaim with the theme: \"${theme}\"`);
           const resp   = await generateContentSafe('gemini-2.5-flash', prompt);
           const parsed = parseGeminiResponse(resp.text);
           applyGameEffects(parsed);
@@ -297,7 +337,8 @@
           const ctxt = last ? `The story so far: ${parseGeminiResponse(last).description}\\n\\n` : '';
           const statsCtx = `Stats: STR ${playerState.stats.Strength}, AGI ${playerState.stats.Agility}, WIT ${playerState.stats.Wits}, CHA ${playerState.stats.Charisma}.`;
           const invCtx = `Inventory: ${playerState.inventory.join(', ') || 'none'}.`;
-          const prompt = getPromptInstruction(`${ctxt}${statsCtx} ${invCtx}\\nChaim's next action is: \"${choice}\". What happens now?`);
+          const loreCtx = playerState.worldHistory ? `World lore: ${JSON.stringify(playerState.worldHistory)}.` : "";
+          const prompt = getPromptInstruction(`${ctxt}${loreCtx} ${statsCtx} ${invCtx}\\nChaim's next action is: \"${choice}\". What happens now?`);
           const resp   = await generateContentSafe('gemini-2.5-flash', prompt);
           const parsed = parseGeminiResponse(resp.text);
           applyGameEffects(parsed);
