@@ -1,5 +1,5 @@
 // narrator.js — ElevenLabs streamer (client‑side version)
-const ELEVEN_KEY = 'sk_c2f8ed0d2ae4f0d0c3c8b119b96d569dc00d888cd1d1f3d8'; // ⚠️ move server‑side in production
+const ELEVEN_KEY = import.meta.env.VITE_ELEVEN_KEY;
 const VOICE_ID   = 'EiNlNiXeDU1pqqOPrYMO';
 
 let narratorOn    = false;
