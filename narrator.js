@@ -4,24 +4,44 @@ const VOICE_ID   = 'EiNlNiXeDU1pqqOPrYMO';                                   // 
 
 let narratorOn   = false;
 let currentAudio = null;
-let audioUnlocked = false; // <<< NEW: Tracks if audio is unlocked
+let audioUnlocked = false; // Tracks if audio is unlocked
+let persistentAudio = null; // Reference to the persistent audio element
 
 /**
- * NEW: Unlocks audio playback on mobile browsers.
- * This function should be called from within a user-initiated event (e.g., a click).
- * It plays a tiny silent audio clip, which "primes" the browser to allow
- * subsequent programmatic audio playback.
+ * Unlocks audio playback on mobile browsers.
+ * Uses the persistent audio element and ensures it's properly initialized.
  */
-function unlockAudioForMobile() {
+export function unlockAudioForMobile() {
   if (audioUnlocked) return;
-  const silentAudio = new Audio(
-    'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA='
-  );
-  silentAudio.volume = 0;
-  silentAudio.play().catch(() => {
-    // Errors are expected on desktop and where not needed; we can ignore them.
+  
+  // Get or create the persistent audio element
+  if (!persistentAudio) {
+    persistentAudio = document.getElementById('narrator-audio-element');
+    if (!persistentAudio) {
+      persistentAudio = document.createElement('audio');
+      persistentAudio.preload = 'auto';
+      document.body.appendChild(persistentAudio);
+    }
+  }
+  
+  // Play a silent audio to unlock the audio context
+  const silentDataUrl = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=';
+  persistentAudio.src = silentDataUrl;
+  persistentAudio.volume = 0;
+  persistentAudio.play().then(() => {
+    audioUnlocked = true;
+  }).catch(() => {
+    // Try again with a different approach for stubborn mobile browsers
+    try {
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      audioContext.resume().then(() => {
+        audioUnlocked = true;
+      });
+    } catch (e) {
+      // If all else fails, mark as unlocked anyway to prevent infinite attempts
+      audioUnlocked = true;
+    }
   });
-  audioUnlocked = true;
 }
 
 export function toggleNarrator(flag) {
@@ -86,13 +106,41 @@ async function streamChunk(chunk) {
     parts.push(value);
   }
   const blob  = new Blob(parts, { type: 'audio/mpeg' });
-  const audio = new Audio(URL.createObjectURL(blob));
+  const audioUrl = URL.createObjectURL(blob);
+
+  // Use the persistent audio element for better mobile support
+  if (!persistentAudio) {
+    persistentAudio = document.getElementById('narrator-audio-element');
+    if (!persistentAudio) {
+      persistentAudio = document.createElement('audio');
+      persistentAudio.preload = 'auto';
+      document.body.appendChild(persistentAudio);
+    }
+  }
+
+  // Set the audio source and play
+  persistentAudio.src = audioUrl;
+  currentAudio = persistentAudio;
 
   // play completely before returning (prevents overlaps)
   await new Promise((resolve) => {
-    audio.onended = resolve;
-    audio.onerror = resolve;  // fail‑safe
-    currentAudio  = audio;
-    audio.play();
+    persistentAudio.onended = () => {
+      URL.revokeObjectURL(audioUrl); // Clean up blob URL
+      resolve();
+    };
+    persistentAudio.onerror = () => {
+      URL.revokeObjectURL(audioUrl); // Clean up blob URL
+      resolve(); // fail‑safe
+    };
+    
+    // Attempt to play with better error handling for mobile
+    persistentAudio.play().catch((error) => {
+      console.warn('Audio playback failed:', error);
+      // Try to unlock audio if not already done
+      if (!audioUnlocked) {
+        unlockAudioForMobile();
+      }
+      resolve(); // Continue even if playback fails
+    });
   });
 }
