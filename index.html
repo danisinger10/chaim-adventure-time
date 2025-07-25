@@ -34,27 +34,6 @@
       import { narrate, toggleNarrator } from './narrator.js';
       import { GoogleGenAI }            from 'https://esm.sh/@google/genai@1.11.0?bundle';
 
-      /* ---------- mobile audio unlock ---------- */
-      // Ensure audio is unlocked on any user interaction
-      let audioUnlockAttempted = false;
-      
-      function attemptAudioUnlock() {
-        if (audioUnlockAttempted) return;
-        audioUnlockAttempted = true;
-        
-        // Try to unlock audio by calling the narrator's unlock function
-        const audio = document.getElementById('narrator-audio-element');
-        if (audio) {
-          // Dispatch a custom event to let narrator.js handle the unlock
-          document.dispatchEvent(new CustomEvent('userInteraction'));
-        }
-      }
-      
-      // Add listeners for various user interaction events
-      ['click', 'touchstart', 'keydown'].forEach(eventType => {
-        document.addEventListener(eventType, attemptAudioUnlock, { once: true });
-      });
-
       /* ---------- narrator controls ---------- */
       const narrBtn = document.createElement('button');
       narrBtn.textContent = '🎙 Narrator';
@@ -79,7 +58,8 @@
       /* --------------------------------------- */
 
       /* -------------- Gemini setup ------------ */
-      const apiKey = import.meta.env?.VITE_GEMINI_KEY || window.VITE_GEMINI_KEY;
+      // For development - in production, use environment variables
+      const apiKey = import.meta.env?.VITE_GEMINI_KEY || window.VITE_GEMINI_KEY || 'AIzaSyBOMarZfaw9O5v5ncQjocSRQ-G2I55Onb8';
       let   ai;
       function getAI() {
         if (!ai) {
