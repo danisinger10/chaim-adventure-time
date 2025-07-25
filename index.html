@@ -58,8 +58,15 @@
       /* --------------------------------------- */
 
       /* -------------- Gemini setup ------------ */
-      const apiKey     = import.meta.env.VITE_GEMINI_KEY;
-      const ai     = new GoogleGenAI({ apiKey });
+      const apiKey = import.meta.env?.VITE_GEMINI_KEY || window.VITE_GEMINI_KEY;
+      let   ai;
+      function getAI() {
+        if (!ai) {
+          if (!apiKey) throw new Error('Gemini API key missing.');
+          ai = new GoogleGenAI({ apiKey });
+        }
+        return ai;
+      }
 
       const suggestions = [
         "Chaim races to recover his ADHD meds before they fall into the wrong hands",
@@ -113,11 +120,11 @@
           const data = await res.json();
           return { text: data.candidates?.[0]?.content?.parts?.[0]?.text ?? '' };
         }
-        return await ai.models.generateContent({ model, contents: prompt });
+        return await getAI().models.generateContent({ model, contents: prompt });
       }
 
       async function generateImage(prompt) {
-        const resp = await ai.models.generateImages({
+        const resp = await getAI().models.generateImages({
           model : 'imagen-3.0-generate-002',
           prompt: `${prompt}, cinematic lighting, highly detailed`,
           config: { numberOfImages:1, outputMimeType:'image/jpeg', aspectRatio:'16:9' }
