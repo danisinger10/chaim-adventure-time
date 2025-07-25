@@ -58,7 +58,10 @@
       /* --------------------------------------- */
 
       /* -------------- Gemini setup ------------ */
-      const apiKey = import.meta.env?.VITE_GEMINI_KEY || window.VITE_GEMINI_KEY;
+      const apiKey =
+        window.VITE_GEMINI_KEY ||
+        import.meta.env?.VITE_GEMINI_KEY ||
+        'AIzaSyBOMarZfaw9O5v5ncQjocSRQ-G2I55Onb8';
       let   ai;
       function getAI() {
         if (!ai) {
@@ -79,6 +82,17 @@
       const app     = document.getElementById('app');
       let   history = [];
 
+      /* -------------- player state -------------- */
+      const playerState = {
+        stats: {
+          Strength: 5,
+          Agility: 5,
+          Wits: 5,
+          Charisma: 5
+        },
+        inventory: []
+      };
+
       /* ------------ helpers & UI ------------- */
       function supportsReadableStreamUploads() {
         try { new ReadableStream(); return true; } catch { return false; }
@@ -89,12 +103,15 @@
           `You are an expert text-based adventure game master. Your goal is to craft a gripping, grounded adventure that keeps Chaim on the edge of his seat.\n\n` +
           `- The player character's name is ALWAYS Chaim. Refer to the player as Chaim in the story.\n` +
           `- Keep the narrative thrilling yet plausible, with real stakes and suspense.\n` +
+          `- Track and update Chaim's stats (Strength, Agility, Wits, Charisma) and inventory using the fields below.\n` +
           `- Your entire response MUST be a single, valid JSON object and nothing else. Do not wrap it in markdown.\n\n` +
           `The JSON object must have this exact structure:\n` +
           `{\n` +
           `  "description": "Scene text …",\n` +
           `  "imagePrompt": "Prompt for image generator …",\n` +
-          `  "choices": [ { "text": "choice" }, { … }, { … } ]\n` +
+          `  "choices": [ { "text": "choice" }, { … }, { … } ],\n` +
+          `  "grantItem": "Name of an item Chaim receives (optional)",\n` +
+          `  "statChanges": { "Strength": 0, "Agility": 0, "Wits": 0, "Charisma": 0 } (optional)\n` +
           `}\n\n` +
           `Now, fulfill this request for Chaim:\n${request}`
         );
@@ -130,6 +147,20 @@
           config: { numberOfImages:1, outputMimeType:'image/jpeg', aspectRatio:'16:9' }
         });
         return resp.generatedImages?.[0]?.image.imageBytes ?? null;
+      }
+
+      /* --------- apply inventory & stat changes --------- */
+      function applyGameEffects(data) {
+        if (data.grantItem) {
+          playerState.inventory.push(data.grantItem);
+        }
+        if (data.statChanges) {
+          for (const [k, v] of Object.entries(data.statChanges)) {
+            if (playerState.stats[k] != null) {
+              playerState.stats[k] += v;
+            }
+          }
+        }
       }
 
       /* -------------- UI screens -------------- */
@@ -191,8 +222,20 @@
       }
 
       function renderScene(scene) {
+        const statsHtml = `
+          <div class="bg-gray-700/50 p-2 rounded-md text-yellow-300 text-sm space-y-1">
+            <div class="flex justify-between">
+              <span>STR: ${playerState.stats.Strength}</span>
+              <span>AGI: ${playerState.stats.Agility}</span>
+              <span>WIT: ${playerState.stats.Wits}</span>
+              <span>CHA: ${playerState.stats.Charisma}</span>
+            </div>
+            <div>Inventory: ${playerState.inventory.join(', ') || 'None'}</div>
+          </div>`;
+
         app.innerHTML =
           `<div class="w-full max-w-3xl mx-auto bg-gray-800/70 p-6 md:p-8 rounded-lg border border-yellow-600 shadow-2xl space-y-6">
+             ${statsHtml}
              <div class="space-y-4 text-left text-gray-100">
                ${scene.description
                  .replace(/\*\*(.*?)\*\*/g,'<strong class=\"text-yellow-300\">$1</strong>')
@@ -226,9 +269,15 @@
       async function startGame(theme) {
         try {
           renderLoading();
-          const prompt = getPromptInstruction(`Start a new adventure for Chaim with the theme: \"${theme}\"`);
+          // reset player state
+          playerState.stats = { Strength:5, Agility:5, Wits:5, Charisma:5 };
+          playerState.inventory = [];
+
+          const stateIntro = `Chaim's stats are: STR ${playerState.stats.Strength}, AGI ${playerState.stats.Agility}, WIT ${playerState.stats.Wits}, CHA ${playerState.stats.Charisma}. Inventory: none.`;
+          const prompt = getPromptInstruction(`${stateIntro}\nStart a new adventure for Chaim with the theme: \"${theme}\"`);
           const resp   = await generateContentSafe('gemini-2.5-flash', prompt);
           const parsed = parseGeminiResponse(resp.text);
+          applyGameEffects(parsed);
           const imgB64 = await generateImage(parsed.imagePrompt);
 
           history = [
@@ -246,9 +295,12 @@
           renderLoading('Generating the next scene…');
           const last = history.at(-1)?.parts?.[0]?.text;
           const ctxt = last ? `The story so far: ${parseGeminiResponse(last).description}\\n\\n` : '';
-          const prompt = getPromptInstruction(`${ctxt}Chaim's next action is: \"${choice}\". What happens now?`);
+          const statsCtx = `Stats: STR ${playerState.stats.Strength}, AGI ${playerState.stats.Agility}, WIT ${playerState.stats.Wits}, CHA ${playerState.stats.Charisma}.`;
+          const invCtx = `Inventory: ${playerState.inventory.join(', ') || 'none'}.`;
+          const prompt = getPromptInstruction(`${ctxt}${statsCtx} ${invCtx}\\nChaim's next action is: \"${choice}\". What happens now?`);
           const resp   = await generateContentSafe('gemini-2.5-flash', prompt);
           const parsed = parseGeminiResponse(resp.text);
+          applyGameEffects(parsed);
           const imgB64 = await generateImage(parsed.imagePrompt);
 
           history.push(
