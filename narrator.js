@@ -61,8 +61,9 @@ export async function narrate(text) {
 /* ---------- private: stream one chunk ---------- */
 async function streamChunk(chunk) {
   try {
+    // Use maximum streaming optimization for faster response
     const res = await fetch(
-      `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}/stream?optimize_streaming_latency=3`,
+      `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}/stream?optimize_streaming_latency=4`,
       {
         method : 'POST',
         headers: {
@@ -72,7 +73,7 @@ async function streamChunk(chunk) {
         body: JSON.stringify({
           text          : chunk,
           model_id      : 'eleven_multilingual_v2',
-          voice_settings: { stability: 0.70, similarity_boost: 0.65 }
+          voice_settings: { stability: 0.65, similarity_boost: 0.60 } // Faster settings
         })
       }
     );
