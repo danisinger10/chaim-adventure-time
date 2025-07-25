@@ -1,5 +1,11 @@
 // narrator.js — ElevenLabs streamer (client‑side version)
-const ELEVEN_KEY = import.meta.env.VITE_ELEVEN_KEY;
+const ELEVEN_KEY =
+  import.meta.env?.VITE_ELEVEN_KEY ||
+  import.meta.env?.ELEVEN_API_KEY ||
+  window.VITE_ELEVEN_KEY ||
+  window.ELEVEN_API_KEY ||
+  window.process?.env?.VITE_ELEVEN_KEY ||
+  window.process?.env?.ELEVEN_API_KEY;
 const VOICE_ID   = 'EiNlNiXeDU1pqqOPrYMO';
 
 let narratorOn    = false;
@@ -34,6 +40,10 @@ export function toggleNarrator(flag) {
 
 export async function narrate(text) {
   if (!narratorOn || !narratorAudioElement) return;
+  if (!ELEVEN_KEY) {
+    console.warn('ElevenLabs API key missing.');
+    return;
+  }
   if (!audioUnlocked) unlockAudioForMobile();           // belt‑and‑suspenders
 
   for (const chunk of splitIntoChunks(text)) {
