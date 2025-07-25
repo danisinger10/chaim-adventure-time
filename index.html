@@ -1,123 +1,178 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Chaim’s Adventure</title>
+<head>
+  <meta charset="UTF-8" />
+  <title>Chaim’s Adventure</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-    <!-- TailwindCSS CDN for styling -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Markdown parser (optional but nice) -->
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <!-- Tailwind CSS via CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
 
-    <style>
-      body { background:#0f172a; color:#f1f5f9; }
-      #scene { background-size:cover; background-position:center; transition:background-image 0.6s ease-out; }
-    </style>
-  </head>
-  <body class="min-h-screen flex flex-col items-center p-4 select-none">
-    <h1 class="text-3xl font-bold mb-4">Chaim’s Adventure</h1>
-    <div id="scene" class="w-full max-w-3xl p-6 rounded-xl bg-slate-800 shadow mb-6 whitespace-pre-wrap leading-relaxed"></div>
-    <div id="choices" class="w-full max-w-3xl flex flex-col gap-3"></div>
+  <!-- Framer Motion (UMD) -->
+  <script src="https://unpkg.com/framer-motion/dist/framer-motion.umd.js"></script>
 
-    <script type="module">
-      // ========================= Story Engine (inlined) =========================
-      /* Branching Story Engine v2 – self‑contained */
-      class StoryEngine {
-        constructor({ data, onScene, rng=Math.random }) {
-          this.data = data;
-          this.onScene = onScene;
-          this.rng = rng;
-          this.state = { current:null, flags:{}, history:[] };
-        }
-        start(nodeId="start", savedFlags=null) {
-          if (savedFlags) this.state.flags = { ...savedFlags };
-          this.#enter(nodeId);
-        }
-        choose(choiceIndex) {
-          const node = this.data[this.state.current];
-          const choices = this.#visible(node);
-          const choice = choices[choiceIndex];
-          if (!choice) return;
-          if (choice.setFlags) Object.entries(choice.setFlags).forEach(([k,v])=>{this.state.flags[k]=v;});
-          if (choice.unsetFlags) choice.unsetFlags.forEach(k=>delete this.state.flags[k]);
-          this.#enter(choice.target);
-        }
-        save() { return JSON.stringify({current:this.state.current,flags:this.state.flags,history:this.state.history}); }
-        load(str) { const obj=JSON.parse(str); this.state.flags=obj.flags||{}; this.state.history=obj.history||[]; this.#enter(obj.current); }
-        // ----- privates -----
-        #enter(id){
-          const n=this.data[id]; if(!n) throw Error(`Node ${id} missing`);
-          this.state.current=id; this.state.history.push(id);
-          if(n.flags) Object.entries(n.flags).forEach(([k,v])=>{ v===null?delete this.state.flags[k]:this.state.flags[k]=v; });
-          this.onScene({...n,visibleChoices:this.#visible(n)});
-          if(this._timer) clearTimeout(this._timer);
-          if(n.timeout && n.next){ this._timer=setTimeout(()=>this.#enter(n.next), n.timeout); }
-          if(typeof n.onEnter==="function") n.onEnter(this);
-        }
-        #visible(node){
-          if(!node.choices) return [];
-          let pool=node.choices.filter(c=>{
-            const reqOk=!c.require||c.require.every(f=>this.state.flags[f]);
-            const exOk=!c.exclude||c.exclude.every(f=>!this.state.flags[f]);
-            return reqOk&&exOk;
-          });
-          if(pool.some(c=>c.weight>1)){ const tot=pool.reduce((s,c)=>s+(c.weight||1),0); let roll=this.rng()*tot; for(const c of pool){ roll-=c.weight||1; if(roll<=0) return [c]; } }
-          return pool;
-        }
-      }
-      // ========================= Demo Story =========================
-      const demoStory={
-        start:{
-          text:"Sirens cut through the night as **you** vault a toppled dumpster.\n\nTwo routes flash before you:",
-          choices:[
-            {text:"Scale the chain‑link fence",target:"fence",setFlags:{athletic:true}},
-            {text:"Kick open the service door",target:"door"}
-          ]
-        },
-        fence:{
-          text:"Your fingers sting as you haul over the rattling fence. An agent swings a stun gun up at you!",
-          choices:[
-            {text:"Leap to the alley",target:"alley",weight:2,require:["athletic"]},
-            {text:"Freeze and plead innocence",target:"caught"}
-          ]
-        },
-        door:{
-          text:"The rusty door screeches into a boiler room thick with steam.",
-          flags:{stealth:true},
-          choices:[
-            {text:"Sneak between the boilers",target:"boiler",require:["stealth"]},
-            {text:"Rip a pipe loose as weapon",target:"armed",setFlags:{armed:true},unsetFlags:["stealth"]}
-          ]
-        },
-        alley:{ text:"You roll onto wet asphalt and sprint into darkness. **You escaped—for now.**", choices:[] },
-        caught:{ text:"Blue arcs of electricity kiss your vision goodbye. **BUSTED.**", choices:[] },
-        boiler:{ text:"You glide past gauges. A secret hatch glows red ahead…", choices:[] },
-        armed:{ text:"Pipe in hand, you feel invincible—until footsteps echo behind you…", choices:[] }
-      };
-      // ========================= Renderer =========================
-      const sceneEl=document.getElementById("scene");
-      const choicesEl=document.getElementById("choices");
-      const md=(s)=>window.marked?marked.parse(s):s.replace(/\n/g,"<br>");
-      const engine=new StoryEngine({
-        data:demoStory,
-        onScene:({text,img,visibleChoices})=>{
-          sceneEl.innerHTML=md(text);
-          sceneEl.style.backgroundImage=img?`url(${img})`:"none";
-          choicesEl.innerHTML="";
-          if(!visibleChoices.length){
-            const end=document.createElement("p"); end.textContent="THE END — refresh to replay"; choicesEl.appendChild(end); return; }
-          visibleChoices.forEach((c,i)=>{
-            const b=document.createElement("button");
-            b.className="px-4 py-2 rounded bg-purple-700 hover:bg-purple-600 active:scale-95 transition text-white";
-            b.textContent=c.text;
-            b.onclick=()=>engine.choose(i);
-            choicesEl.appendChild(b);
-          });
-          localStorage.setItem('chaimAdventureSave',engine.save());
-        }
-      });
-      try{ const saved=localStorage.getItem('chaimAdventureSave'); saved?engine.load(saved):engine.start(); }catch(e){ console.error(e); engine.start(); }
-    </script>
-  </body>
+  <style>
+    /* Neon-noir palette */
+    :root{
+      --bg-main:#0e0e1a;
+      --bg-accent:#131327;
+      --txt-primary:#e6e6ff;
+      --neon:#ff007a;
+      --neon-alt:#00e8ff;
+    }
+    body{
+      background:var(--bg-main);
+      color:var(--txt-primary);
+      overscroll-behavior:none;
+      font-family:Inter,system-ui,Arial,sans-serif;
+    }
+    /* Parallax background layers */
+    .layer{
+      position:fixed;
+      top:0;left:0;width:100%;height:100%;
+      background-position:center;
+      background-size:cover;
+      pointer-events:none;
+      will-change:transform;
+    }
+    #layer1{background-image:linear-gradient(120deg,#0e0e1a 0%,#131327 100%);}
+    #layer2{background-image:url('https://images.unsplash.com/photo-1520052205866-2b46334a39d5?auto=format&fit=crop&w=1200&q=60');opacity:.15;}
+    #layer3{background-image:url('https://images.unsplash.com/photo-1520170143950-a8e25d3bb90d?auto=format&fit=crop&w=1200&q=60');opacity:.10;}
+
+    /* Choice buttons */
+    .choice{
+      background:var(--bg-accent);
+      border:2px solid var(--neon);
+      padding:.75rem 1.25rem;
+      margin:.5rem 0;
+      border-radius:.375rem;
+      font-weight:600;
+      transition:all .2s;
+    }
+    .choice:hover{background:var(--neon);color:#000;}
+
+    /* Neon headline */
+    h1{
+      font-size:2rem;
+      font-weight:700;
+      color:var(--neon-alt);
+      text-shadow:0 0 6px var(--neon-alt);
+    }
+  </style>
+</head>
+<body>
+
+<div id="layer1" class="layer"></div>
+<div id="layer2" class="layer"></div>
+<div id="layer3" class="layer"></div>
+
+<!-- Game container -->
+<div id="app" class="relative min-h-screen flex items-center justify-center p-6">
+  <!-- Framer Motion wrapper -->
+  <div id="sceneRoot" class="max-w-lg w-full"></div>
+</div>
+
+<!-- The entire branching engine + story inline -->
+<script type="module">
+/* ---------- PARALLAX SCROLL ---------- */
+const layers=[document.getElementById('layer2'),document.getElementById('layer3')];
+window.addEventListener('scroll',()=>{const y=window.scrollY;
+  layers[0].style.transform=\`translateY(\${y*0.2}px)\`;
+  layers[1].style.transform=\`translateY(\${y*0.4}px)\`;
+});
+
+/* ---------- STORY DATA ---------- */
+const story={
+  start:'heist_intro',
+  passages:{
+    heist_intro:{
+      text:`# Prologue  
+The rain hammers neon streets. You’re clutching the micro-drive with **₿48 million** in unlaundered crypto. Sirens wail.
+
+A shadowy figure darts from the alley—gun drawn. You’ve got seconds to react.`,
+      choices:[
+        {text:'Run for the subway vents',next:'vents_escape',flag:'athletic'},
+        {text:'Duck into the night market',next:'market_mingle'},
+        {text:'Face the gunman head-on',next:'standoff',flag:'brave'}
+      ]
+    },
+    vents_escape:{
+      text:`You vault the railing, slide into the maintenance vent, and the city’s heartbeat dulls behind steel.  
+Hot air blasts your face. A red sensor blinks ahead.`,
+      choices:[
+        {text:'Crawl forward, risk the sensor',next:'sensor_trip'},
+        {text:'Backtrack and find another route',next:'backtrack'}
+      ]
+    },
+    market_mingle:{
+      text:`Steam, spices, counterfeit tech—chaos everywhere. The gunman loses your trail, but two undercover agents spot the blood-stained drive in your hand.`,
+      choices:[
+        {text:'Blend with the crowd',next:'crowd_blend'},
+        {text:'Offer bribe to agents',next:'bribe_attempt'}
+      ]
+    },
+    standoff:{
+      text:`Your stare could cut glass. The gunman smirks.  
+> “Hand it over or paint the street.”  
+You notice his finger trembles.`,
+      choices:[
+        {text:'Throw a flash pellet (you always carry one)',next:'flashbang'},
+        {text:'Negotiate—stall for backup',next:'negotiate'}
+      ]
+    },
+    // … add more passages / endings …
+  }
+};
+
+/* ---------- SAVE / LOAD ---------- */
+const saveKey='chaim_adventure_save';
+function save(state){ localStorage.setItem(saveKey,JSON.stringify(state)); }
+function load(){ return JSON.parse(localStorage.getItem(saveKey)); }
+
+/* ---------- RENDER ENGINE ---------- */
+import { motion, animate } from 'https://cdn.skypack.dev/framer-motion@10.16.1';
+const root=document.getElementById('sceneRoot');
+
+function mdToHtml(md){
+  // super-light Markdown → HTML
+  return md
+    .replace(/^# (.*$)/gim,'<h1>$1</h1>')
+    .replace(/^> (.*$)/gim,'<blockquote>$1</blockquote>')
+    .replace(/\*\*(.*?)\*\*/gim,'<strong>$1</strong>')
+    .replace(/\n/g,'<br>');
+}
+
+function render(sceneId,state){
+  const node=story.passages[sceneId];
+  if(!node){alert('Scene missing:'+sceneId);return;}
+  state.current=sceneId; save(state);
+
+  // wipe & animate container
+  root.innerHTML='';
+  const scene=document.createElement('div');
+  scene.className='bg-[rgba(0,0,0,0.6)] backdrop-blur-md p-6 rounded-xl shadow-xl';
+  scene.innerHTML=\`<div class="prose prose-invert">\${mdToHtml(node.text)}</div>\`;
+
+  node.choices.forEach(ch=>{
+    const btn=document.createElement('button');
+    btn.className='choice';
+    btn.textContent=ch.text;
+    btn.onclick=()=>{ if(ch.flag)state.flags[ch.flag]=true; render(ch.next,state); };
+    scene.appendChild(btn);
+  });
+
+  root.appendChild(scene);
+
+  // Framer fade/slide
+  motion(scene).from({opacity:0,y:40}).to({opacity:1,y:0},{duration:0.6});
+}
+
+function start(){
+  const state=load()||{flags:{},current:story.start};
+  render(state.current,state);
+}
+start();
+</script>
+
+</body>
 </html>
