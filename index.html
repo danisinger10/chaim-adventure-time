@@ -79,23 +79,48 @@
       const app     = document.getElementById('app');
       let   history = [];
 
+      // Persistent character state
+      let playerState;
+      function resetPlayerState() {
+        playerState = {
+          stats: {
+            Strength: 5,
+            Agility : 5,
+            Wits    : 5,
+            Charisma: 5
+          },
+          inventory: []
+        };
+      }
+      resetPlayerState();
+
       /* ------------ helpers & UI ------------- */
       function supportsReadableStreamUploads() {
         try { new ReadableStream(); return true; } catch { return false; }
       }
 
       function getPromptInstruction(request) {
+        const s = playerState.stats;
+        const inv = playerState.inventory.length
+          ? playerState.inventory.join(', ')
+          : 'nothing';
         return (
           `You are an expert text-based adventure game master. Your goal is to craft a gripping, grounded adventure that keeps Chaim on the edge of his seat.\n\n` +
           `- The player character's name is ALWAYS Chaim. Refer to the player as Chaim in the story.\n` +
           `- Keep the narrative thrilling yet plausible, with real stakes and suspense.\n` +
+          `- Chaim has persistent character stats and an inventory that you control.\n` +
+          `- When relevant, you may award items or modify stats.\n` +
           `- Your entire response MUST be a single, valid JSON object and nothing else. Do not wrap it in markdown.\n\n` +
-          `The JSON object must have this exact structure:\n` +
+          `The JSON object must have this structure:\n` +
           `{\n` +
           `  "description": "Scene text …",\n` +
           `  "imagePrompt": "Prompt for image generator …",\n` +
-          `  "choices": [ { "text": "choice" }, { … }, { … } ]\n` +
+          `  "choices": [ { "text": "choice" }, { … }, { … } ],\n` +
+          `  "gainItem": "Optional item Chaim receives",\n` +
+          `  "loseItem": "Optional item Chaim loses",\n` +
+          `  "statChanges": { "Strength": 0, "Agility": 0, "Wits": 0, "Charisma": 0 }\n` +
           `}\n\n` +
+          `Chaim's current stats: Strength ${s.Strength}, Agility ${s.Agility}, Wits ${s.Wits}, Charisma ${s.Charisma}. Inventory: ${inv}.\n\n` +
           `Now, fulfill this request for Chaim:\n${request}`
         );
       }
@@ -103,9 +128,26 @@
       function parseGeminiResponse(txt) {
         const clean = txt.replace(/^```json/, '').replace(/```$/, '').trim();
         const obj   = JSON.parse(clean);
-        if (!obj.description || !obj.imagePrompt || !Array.isArray(obj.choices))
+        if (!obj.description || !obj.imagePrompt || !Array.isArray(obj.choices)) {
           throw new Error('Gemini JSON malformed.');
+        }
         return obj;
+      }
+
+      function applyGeminiEffects(obj) {
+        if (obj.gainItem) {
+          playerState.inventory.push(obj.gainItem);
+        }
+        if (obj.loseItem) {
+          playerState.inventory = playerState.inventory.filter(i => i !== obj.loseItem);
+        }
+        if (obj.statChanges) {
+          for (const [k, v] of Object.entries(obj.statChanges)) {
+            if (playerState.stats[k] !== undefined) {
+              playerState.stats[k] += v;
+            }
+          }
+        }
       }
 
       async function generateContentSafe(model, prompt) {
@@ -198,6 +240,23 @@
                  .replace(/\*\*(.*?)\*\*/g,'<strong class=\"text-yellow-300\">$1</strong>')
                  .replace(/\\n/g,'<br/>')}
              </div>
+             <div class="bg-gray-900/60 p-4 rounded-lg text-sm grid sm:grid-cols-2 gap-4">
+               <div>
+                 <h3 class="font-semibold text-yellow-300 mb-1">Stats</h3>
+                 <ul class="list-disc list-inside">
+                   <li>Strength: ${playerState.stats.Strength}</li>
+                   <li>Agility: ${playerState.stats.Agility}</li>
+                   <li>Wits: ${playerState.stats.Wits}</li>
+                   <li>Charisma: ${playerState.stats.Charisma}</li>
+                 </ul>
+               </div>
+               <div>
+                 <h3 class="font-semibold text-yellow-300 mb-1">Inventory</h3>
+                 <ul class="list-disc list-inside">
+                   ${playerState.inventory.length ? playerState.inventory.map(i => `<li>${i}</li>`).join('') : '<li>None</li>'}
+                 </ul>
+               </div>
+             </div>
              ${scene.imageBase64 ? `
                <div class="flex justify-center">
                  <img
@@ -226,9 +285,11 @@
       async function startGame(theme) {
         try {
           renderLoading();
+          resetPlayerState();
           const prompt = getPromptInstruction(`Start a new adventure for Chaim with the theme: \"${theme}\"`);
           const resp   = await generateContentSafe('gemini-2.5-flash', prompt);
           const parsed = parseGeminiResponse(resp.text);
+          applyGeminiEffects(parsed);
           const imgB64 = await generateImage(parsed.imagePrompt);
 
           history = [
@@ -249,6 +310,7 @@
           const prompt = getPromptInstruction(`${ctxt}Chaim's next action is: \"${choice}\". What happens now?`);
           const resp   = await generateContentSafe('gemini-2.5-flash', prompt);
           const parsed = parseGeminiResponse(resp.text);
+          applyGeminiEffects(parsed);
           const imgB64 = await generateImage(parsed.imagePrompt);
 
           history.push(
