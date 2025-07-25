@@ -34,6 +34,10 @@ export function toggleNarrator(flag) {
 
 export async function narrate(text) {
   if (!narratorOn || !narratorAudioElement) return;
+  if (!ELEVEN_KEY) {
+    console.warn('ElevenLabs API key missing.');
+    return;
+  }
   if (!audioUnlocked) unlockAudioForMobile();           // belt‑and‑suspenders
 
   for (const chunk of splitIntoChunks(text)) {
