@@ -58,8 +58,11 @@
       /* --------------------------------------- */
 
       /* -------------- Gemini setup ------------ */
-      const apiKey = import.meta.env?.VITE_GEMINI_KEY || window.VITE_GEMINI_KEY;
-      let   ai;
+      let apiKey =
+        import.meta.env?.VITE_GEMINI_KEY ||
+        window.VITE_GEMINI_KEY ||
+        localStorage.getItem('geminiApiKey');
+      let ai;
       function getAI() {
         if (!ai) {
           if (!apiKey) throw new Error('Gemini API key missing.');
@@ -170,6 +173,12 @@
                    class="px-4 py-4 rounded-lg bg-gradient-to-r from-yellow-600 to-yellow-800 text-gray-900 font-semibold shadow-md">
                    ${t}</button>`).join('')}
              </div>
+             ${!apiKey ? `
+               <div class="max-w-2xl mx-auto space-y-2">
+                 <input id="gemini-key" type="text" placeholder="Enter Gemini API Key"
+                   class="w-full p-3 rounded-lg border border-yellow-600 bg-gray-900 text-gray-100" />
+                 <p class="text-sm text-yellow-500">Key saved in this browser only</p>
+               </div>` : ''}
              <div class="max-w-2xl mx-auto space-y-4">
                <input id="custom-theme" type="text"
                  placeholder="Or enter your own adventure theme"
@@ -181,9 +190,23 @@
            </div>`;
 
         document.querySelectorAll('button[data-theme]').forEach(b =>
-          b.onclick = () => startGame(decodeURIComponent(b.dataset.theme))
+          b.onclick = () => {
+            if (!apiKey) {
+              const k = document.getElementById('gemini-key').value.trim();
+              if (!k) return alert('Enter your Gemini API key.');
+              apiKey = k;
+              localStorage.setItem('geminiApiKey', apiKey);
+            }
+            startGame(decodeURIComponent(b.dataset.theme));
+          }
         );
         document.getElementById('start-custom').onclick = () => {
+          if (!apiKey) {
+            const k = document.getElementById('gemini-key').value.trim();
+            if (!k) return alert('Enter your Gemini API key.');
+            apiKey = k;
+            localStorage.setItem('geminiApiKey', apiKey);
+          }
           const custom = document.getElementById('custom-theme').value.trim();
           if (!custom) return alert('Enter a theme or pick one.');
           startGame(custom);
