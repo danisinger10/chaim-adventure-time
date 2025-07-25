@@ -4,7 +4,9 @@ const VOICE_ID   = 'EiNlNiXeDU1pqqOPrYMO';                                   // 
 
 let narratorOn   = false;
 let currentAudio = null;
-let audioUnlocked = false; // <<< NEW: Tracks if audio is unlocked
+let audioUnlocked = false; // tracks if audio playback was unlocked
+const narratorAudioElement =
+  document.getElementById('narrator-audio-element');
 
 /**
  * NEW: Unlocks audio playback on mobile browsers.
@@ -14,11 +16,10 @@ let audioUnlocked = false; // <<< NEW: Tracks if audio is unlocked
  */
 function unlockAudioForMobile() {
   if (audioUnlocked) return;
-  const silentAudio = new Audio(
-    'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA='
-  );
-  silentAudio.volume = 0;
-  silentAudio.play().catch(() => {
+  narratorAudioElement.src =
+    'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=';
+  narratorAudioElement.volume = 0;
+  narratorAudioElement.play().catch(() => {
     // Errors are expected on desktop and where not needed; we can ignore them.
   });
   audioUnlocked = true;
@@ -85,14 +86,20 @@ async function streamChunk(chunk) {
     if (done) break;
     parts.push(value);
   }
-  const blob  = new Blob(parts, { type: 'audio/mpeg' });
-  const audio = new Audio(URL.createObjectURL(blob));
+  const blob     = new Blob(parts, { type: 'audio/mpeg' });
+  const audioUrl = URL.createObjectURL(blob);
 
-  // play completely before returning (prevents overlaps)
+  narratorAudioElement.src = audioUrl;
   await new Promise((resolve) => {
-    audio.onended = resolve;
-    audio.onerror = resolve;  // fail‑safe
-    currentAudio  = audio;
-    audio.play();
+    narratorAudioElement.onended = narratorAudioElement.onerror = () => {
+      URL.revokeObjectURL(audioUrl);
+      resolve();
+    };
+    currentAudio = narratorAudioElement;
+    narratorAudioElement.play().catch((err) => {
+      console.error('Playback error:', err);
+      URL.revokeObjectURL(audioUrl);
+      resolve();
+    });
   });
 }
