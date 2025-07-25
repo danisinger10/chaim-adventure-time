@@ -21,6 +21,42 @@
     <div id="choices" class="w-full max-w-3xl flex flex-col gap-3"></div>
 
     <script type="module">
+      // --- Genesis Engine: generates world history on first load ---
+      const GEMINI_KEY = 'YOUR_GEMINI_KEY';
+      async function runGenesisEngine() {
+        const saved = localStorage.getItem('chaimWorldHistory');
+        if (saved) return JSON.parse(saved);
+
+        if (GEMINI_KEY === 'YOUR_GEMINI_KEY') {
+          const placeholder = { myth: 'In the beginning...' };
+          localStorage.setItem('chaimWorldHistory', JSON.stringify(placeholder));
+          return placeholder;
+        }
+
+        const prompt = `Generate a creation myth, two fallen precursor empires with conflicting ideologies, a cataclysmic event that reshaped the world, and three legendary artifacts tied to these events. Respond in JSON.`;
+        try {
+          const res = await fetch(
+            'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=' + GEMINI_KEY,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                contents: [{ role: 'user', parts: [{ text: prompt }] }]
+              })
+            }
+          );
+          const data = await res.json();
+          const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+          const history = JSON.parse(text);
+          localStorage.setItem('chaimWorldHistory', JSON.stringify(history));
+          return history;
+        } catch (err) {
+          console.error('Genesis Engine failed', err);
+          return null;
+        }
+      }
+
+      const playerState = { worldHistory: null };
       // ========================= Story Engine (inlined) =========================
       /* Branching Story Engine v2 – self‑contained */
       class StoryEngine {
@@ -117,7 +153,16 @@
           localStorage.setItem('chaimAdventureSave',engine.save());
         }
       });
-      try{ const saved=localStorage.getItem('chaimAdventureSave'); saved?engine.load(saved):engine.start(); }catch(e){ console.error(e); engine.start(); }
+      (async () => {
+        playerState.worldHistory = await runGenesisEngine();
+        try {
+          const saved = localStorage.getItem('chaimAdventureSave');
+          saved ? engine.load(saved) : engine.start();
+        } catch (e) {
+          console.error(e);
+          engine.start();
+        }
+      })();
     </script>
   </body>
 </html>
