@@ -1,5 +1,5 @@
 // narrator.js — ElevenLabs streamer (client‑side version)
-const ELEVEN_KEY = import.meta.env.VITE_ELEVEN_KEY;
+const ELEVEN_KEY = import.meta.env?.VITE_ELEVEN_KEY || window.VITE_ELEVEN_KEY;
 const VOICE_ID   = 'EiNlNiXeDU1pqqOPrYMO';
 
 let narratorOn    = false;

@@ -58,7 +58,7 @@
       /* --------------------------------------- */
 
       /* -------------- Gemini setup ------------ */
-      const apiKey     = import.meta.env.VITE_GEMINI_KEY;
+      const apiKey = import.meta.env?.VITE_GEMINI_KEY || window.VITE_GEMINI_KEY;
       const ai     = new GoogleGenAI({ apiKey });
 
       const suggestions = [
