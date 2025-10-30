@@ -3,121 +3,508 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Chaim’s Adventure</title>
-
-    <!-- TailwindCSS CDN for styling -->
+    <title>Oasis — Hydration Companion</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Markdown parser (optional but nice) -->
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-
     <style>
-      body { background:#0f172a; color:#f1f5f9; }
-      #scene { background-size:cover; background-position:center; transition:background-image 0.6s ease-out; }
+      body {
+        background: radial-gradient(circle at top left, #60a5fa 0%, #a855f7 45%, #1d1b4b 100%);
+        min-height: 100vh;
+        font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        color: #f8fafc;
+      }
+      .glass {
+        backdrop-filter: blur(18px);
+        background: rgba(15, 23, 42, 0.55);
+      }
+      .soft-scroll::-webkit-scrollbar {
+        width: 6px;
+      }
+      .soft-scroll::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.35);
+        border-radius: 9999px;
+      }
     </style>
   </head>
-  <body class="min-h-screen flex flex-col items-center p-4 select-none">
-    <h1 class="text-3xl font-bold mb-4">Chaim’s Adventure</h1>
-    <div id="scene" class="w-full max-w-3xl p-6 rounded-xl bg-slate-800 shadow mb-6 whitespace-pre-wrap leading-relaxed"></div>
-    <div id="choices" class="w-full max-w-3xl flex flex-col gap-3"></div>
+  <body class="flex flex-col items-center px-4 py-10">
+    <main class="w-full max-w-5xl space-y-8">
+      <header class="glass rounded-3xl shadow-2xl px-8 py-10 border border-white/20">
+        <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+          <div>
+            <p class="uppercase tracking-[0.4em] text-sm text-white/70">Daily vitality dashboard</p>
+            <h1 class="text-4xl md:text-5xl font-extrabold leading-tight">
+              Oasis Hydration Guide
+            </h1>
+            <p class="mt-3 text-lg text-white/80 max-w-xl">
+              Ultra-focused hydration insights that adapt to you. Log every sip, track vibrant progress, and stay safely energized with balanced electrolytes.
+            </p>
+          </div>
+          <div class="glass rounded-2xl px-6 py-5 border border-white/20 text-right">
+            <p class="text-sm uppercase tracking-[0.3em] text-white/60">today's vibe</p>
+            <p id="statusQuote" class="text-2xl font-semibold">Tell us about you to begin.</p>
+          </div>
+        </div>
+      </header>
 
-    <script type="module">
-      // ========================= Story Engine (inlined) =========================
-      /* Branching Story Engine v2 – self‑contained */
-      class StoryEngine {
-        constructor({ data, onScene, rng=Math.random }) {
-          this.data = data;
-          this.onScene = onScene;
-          this.rng = rng;
-          this.state = { current:null, flags:{}, history:[] };
+      <section class="grid lg:grid-cols-[1.2fr_1fr] gap-6">
+        <form id="profileForm" class="glass rounded-3xl border border-white/20 p-8 space-y-6 shadow-xl">
+          <div class="flex items-center gap-3">
+            <span class="text-sm uppercase tracking-[0.4em] text-white/60">Step 1</span>
+            <h2 class="text-2xl font-semibold">Build your hydration blueprint</h2>
+          </div>
+          <p class="text-white/80 leading-relaxed">
+            Just a couple quick details to anchor your personalized hydration science. Everything is calculated in ounces.
+          </p>
+          <div class="grid md:grid-cols-2 gap-5">
+            <label class="space-y-2">
+              <span class="text-sm text-white/70">Current body weight (lbs)</span>
+              <input
+                id="weightInput"
+                type="number"
+                min="70"
+                max="400"
+                step="1"
+                required
+                class="w-full rounded-2xl bg-white/10 border border-white/30 px-4 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-blue-300 text-white"
+                placeholder="e.g. 165"
+              />
+            </label>
+            <label class="space-y-2">
+              <span class="text-sm text-white/70">Most active part of your day</span>
+              <select
+                id="activitySelect"
+                class="w-full rounded-2xl bg-white/10 border border-white/30 px-4 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-blue-300 text-white"
+              >
+                <option value="0">Desk-based / chill (0-15 min of activity)</option>
+                <option value="30">Lightly active (roughly 30 min moving)</option>
+                <option value="60">Training session (45-75 min)</option>
+                <option value="90">Endurance grind (90+ min)</option>
+              </select>
+            </label>
+          </div>
+          <label class="space-y-2 block">
+            <span class="text-sm text-white/70">Climate boost</span>
+            <div class="grid sm:grid-cols-3 gap-3">
+              <button type="button" data-climate="0" class="climateChip rounded-2xl border border-white/30 bg-white/10 px-4 py-3 text-sm font-medium hover:bg-white/20 transition">Indoor controlled</button>
+              <button type="button" data-climate="8" class="climateChip rounded-2xl border border-white/30 bg-white/10 px-4 py-3 text-sm font-medium hover:bg-white/20 transition">Warm + humid</button>
+              <button type="button" data-climate="12" class="climateChip rounded-2xl border border-white/30 bg-white/10 px-4 py-3 text-sm font-medium hover:bg-white/20 transition">Hot + direct sun</button>
+            </div>
+          </label>
+          <button
+            type="submit"
+            class="w-full rounded-2xl bg-gradient-to-r from-sky-400 to-fuchsia-500 py-4 text-lg font-semibold shadow-lg shadow-sky-500/30 hover:scale-[1.01] transition"
+          >
+            Generate my hydration plan
+          </button>
+        </form>
+
+        <aside class="glass rounded-3xl border border-white/20 p-8 space-y-6 shadow-xl">
+          <div class="flex items-center gap-3">
+            <span class="text-sm uppercase tracking-[0.4em] text-white/60">Step 2</span>
+            <h2 class="text-2xl font-semibold">Your personalized targets</h2>
+          </div>
+          <div id="targetsPanel" class="space-y-5 text-white/80">
+            <p class="text-white/70">Fill out your blueprint to calculate smart hydration targets.</p>
+          </div>
+          <div class="border-t border-white/20 pt-4">
+            <p class="uppercase text-xs tracking-[0.5em] text-white/50">safety rails</p>
+            <ul id="safetyList" class="mt-3 space-y-2 text-sm text-white/70">
+              <li>Awaiting your details…</li>
+            </ul>
+          </div>
+        </aside>
+      </section>
+
+      <section class="grid lg:grid-cols-[1.3fr_0.9fr] gap-6">
+        <div class="glass rounded-3xl border border-white/20 p-8 shadow-xl space-y-6">
+          <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+              <p class="uppercase tracking-[0.4em] text-sm text-white/60">Step 3</p>
+              <h2 class="text-2xl font-semibold">Track every sip</h2>
+              <p class="text-white/80">Log water or flavored electrolyte drinks and watch your progress bloom.</p>
+            </div>
+            <div class="flex items-center gap-3">
+              <input
+                id="logAmount"
+                type="number"
+                min="1"
+                step="1"
+                placeholder="oz"
+                class="w-24 rounded-2xl bg-white/10 border border-white/30 px-4 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-amber-200 text-white"
+              />
+              <div class="grid grid-cols-2 gap-2">
+                <button data-quick="8" class="quickAdd px-3 py-2 rounded-xl bg-white/10 border border-white/20 text-sm hover:bg-white/20 transition">+8 oz</button>
+                <button data-quick="12" class="quickAdd px-3 py-2 rounded-xl bg-white/10 border border-white/20 text-sm hover:bg-white/20 transition">+12 oz</button>
+                <button data-quick="16" class="quickAdd px-3 py-2 rounded-xl bg-white/10 border border-white/20 text-sm hover:bg-white/20 transition">+16 oz</button>
+                <button data-quick="20" class="quickAdd px-3 py-2 rounded-xl bg-white/10 border border-white/20 text-sm hover:bg-white/20 transition">+20 oz</button>
+              </div>
+            </div>
+          </div>
+          <div class="flex flex-wrap gap-3">
+            <button
+              id="addWaterBtn"
+              class="flex-1 min-w-[140px] rounded-2xl bg-gradient-to-r from-sky-400 to-cyan-500 py-3 text-lg font-semibold shadow-lg shadow-sky-400/30 hover:scale-[1.01] transition"
+            >
+              Log as water
+            </button>
+            <button
+              id="addElectrolyteBtn"
+              class="flex-1 min-w-[180px] rounded-2xl bg-gradient-to-r from-amber-400 to-rose-500 py-3 text-lg font-semibold shadow-lg shadow-rose-400/30 hover:scale-[1.01] transition"
+            >
+              Log as flavored electrolytes
+            </button>
+          </div>
+          <div class="grid md:grid-cols-2 gap-6">
+            <div class="space-y-3">
+              <div class="flex justify-between text-sm uppercase tracking-[0.3em] text-white/60">
+                <span>Water</span>
+                <span id="waterSummary">0 oz / 0 oz</span>
+              </div>
+              <div class="h-4 rounded-full bg-white/10 overflow-hidden">
+                <div id="waterProgress" class="h-full rounded-full bg-sky-400 transition-[width,background-color] duration-500" style="width:0%"></div>
+              </div>
+              <p id="waterFeedback" class="text-sm text-white/70">
+                Log your first glass to spark the flow.
+              </p>
+            </div>
+            <div class="space-y-3">
+              <div class="flex justify-between text-sm uppercase tracking-[0.3em] text-white/60">
+                <span>Flavored electrolytes</span>
+                <span id="electrolyteSummary">0 oz / 0 oz</span>
+              </div>
+              <div class="h-4 rounded-full bg-white/10 overflow-hidden">
+                <div id="electrolyteProgress" class="h-full rounded-full bg-amber-400 transition-[width,background-color] duration-500" style="width:0%"></div>
+              </div>
+              <p id="electrolyteFeedback" class="text-sm text-white/70">
+                Balanced electrolytes keep you charged without overload.
+              </p>
+            </div>
+          </div>
+          <div>
+            <p class="uppercase tracking-[0.4em] text-xs text-white/50 mb-2">hydration timeline</p>
+            <div id="timeline" class="h-52 rounded-2xl border border-white/20 bg-white/5 overflow-y-auto soft-scroll p-4 space-y-3 text-sm text-white/80">
+              <p class="text-white/60">Entries will appear here once you start logging.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="glass rounded-3xl border border-white/20 p-8 shadow-xl space-y-6">
+          <div class="flex items-center gap-3">
+            <span class="text-sm uppercase tracking-[0.4em] text-white/60">Step 4</span>
+            <h2 class="text-2xl font-semibold">Real-time guidance</h2>
+          </div>
+          <div class="space-y-4 text-white/80" id="guidancePanel">
+            <p class="text-white/70">Keep an eye here for pacing prompts, electrolyte balance reminders, and evening slowdown cues.</p>
+          </div>
+          <div class="border-t border-white/20 pt-4">
+            <p class="uppercase text-xs tracking-[0.5em] text-white/50">today's streak</p>
+            <div id="streakBadge" class="mt-3 rounded-2xl border border-emerald-400/40 bg-emerald-400/20 px-4 py-3 text-emerald-100 text-sm">
+              Hydration streak starts once you hit your minimum target.
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const profileForm = document.getElementById("profileForm");
+      const weightInput = document.getElementById("weightInput");
+      const activitySelect = document.getElementById("activitySelect");
+      const logAmount = document.getElementById("logAmount");
+      const addWaterBtn = document.getElementById("addWaterBtn");
+      const addElectrolyteBtn = document.getElementById("addElectrolyteBtn");
+      const quickButtons = document.querySelectorAll(".quickAdd");
+      const climateChips = document.querySelectorAll(".climateChip");
+      const statusQuote = document.getElementById("statusQuote");
+      const targetsPanel = document.getElementById("targetsPanel");
+      const safetyList = document.getElementById("safetyList");
+      const waterSummary = document.getElementById("waterSummary");
+      const electrolyteSummary = document.getElementById("electrolyteSummary");
+      const waterProgress = document.getElementById("waterProgress");
+      const electrolyteProgress = document.getElementById("electrolyteProgress");
+      const waterFeedback = document.getElementById("waterFeedback");
+      const electrolyteFeedback = document.getElementById("electrolyteFeedback");
+      const timeline = document.getElementById("timeline");
+      const guidancePanel = document.getElementById("guidancePanel");
+      const streakBadge = document.getElementById("streakBadge");
+
+      const state = {
+        plan: null,
+        totals: {
+          water: 0,
+          electrolytes: 0,
+        },
+        log: [],
+        climateBoost: 0,
+      };
+
+      if (climateChips.length) {
+        climateChips[0].classList.add("bg-white/30", "border-white");
+      }
+
+      climateChips.forEach((chip) => {
+        chip.addEventListener("click", () => {
+          climateChips.forEach((c) => c.classList.remove("bg-white/30", "border-white"));
+          chip.classList.add("bg-white/30", "border-white");
+          state.climateBoost = Number(chip.dataset.climate || 0);
+          if (state.plan) {
+            generatePlan();
+          }
+        });
+      });
+
+      quickButtons.forEach((btn) =>
+        btn.addEventListener("click", (event) => {
+          event.preventDefault();
+          logAmount.value = btn.dataset.quick;
+        })
+      );
+
+      profileForm.addEventListener("submit", (event) => {
+        event.preventDefault();
+        if (!weightInput.value) {
+          weightInput.focus();
+          return;
         }
-        start(nodeId="start", savedFlags=null) {
-          if (savedFlags) this.state.flags = { ...savedFlags };
-          this.#enter(nodeId);
+        generatePlan();
+        statusQuote.textContent = "Plan locked in—start logging!";
+      });
+
+      function generatePlan() {
+        const weight = Number(weightInput.value);
+        const activityMinutes = Number(activitySelect.value);
+        if (!weight || weight < 70) {
+          targetsPanel.innerHTML = `<p class="text-red-200">Weight must be at least 70 lbs to compute a safe hydration plan.</p>`;
+          return;
         }
-        choose(choiceIndex) {
-          const node = this.data[this.state.current];
-          const choices = this.#visible(node);
-          const choice = choices[choiceIndex];
-          if (!choice) return;
-          if (choice.setFlags) Object.entries(choice.setFlags).forEach(([k,v])=>{this.state.flags[k]=v;});
-          if (choice.unsetFlags) choice.unsetFlags.forEach(k=>delete this.state.flags[k]);
-          this.#enter(choice.target);
+
+        const baseWater = weight * 0.5;
+        const activityBoost = (activityMinutes / 30) * 12;
+        const climateBoost = state.climateBoost;
+        const optimalWater = Math.round(baseWater + activityBoost + climateBoost);
+        const minimumWater = Math.round(Math.max(weight * 0.4, baseWater - 12));
+        const electrolyteMin = Math.round(activityMinutes > 30 ? 16 + (activityMinutes / 30) * 4 : 12);
+        const computedElectrolyteMax = Math.round(Math.min(optimalWater * 0.3, 64 + activityMinutes));
+        const electrolyteMax = Math.max(electrolyteMin + 6, computedElectrolyteMax);
+
+        state.plan = {
+          weight,
+          activityMinutes,
+          minimumWater,
+          optimalWater,
+          electrolyteMin,
+          electrolyteMax,
+        };
+
+        updateTargets();
+        updateTotals();
+        refreshGuidance();
+      }
+
+      function updateTargets() {
+        if (!state.plan) return;
+        const {
+          weight,
+          activityMinutes,
+          minimumWater,
+          optimalWater,
+          electrolyteMin,
+          electrolyteMax,
+        } = state.plan;
+
+        const activityLabels = {
+          0: "Desk-based / chill",
+          30: "Lightly active",
+          60: "Training session",
+          90: "Endurance grind",
+        };
+
+        targetsPanel.innerHTML = `
+          <div class="space-y-4">
+            <div class="rounded-2xl border border-white/20 bg-white/10 p-4">
+              <p class="text-xs uppercase tracking-[0.4em] text-white/60">Daily water goal</p>
+              <p class="text-3xl font-bold text-white">${optimalWater} oz</p>
+              <p class="text-sm text-white/70">Minimum guardrail: <span class="font-semibold text-white">${minimumWater} oz</span>. Anything under that and your body runs on fumes.</p>
+            </div>
+            <div class="rounded-2xl border border-white/20 bg-white/10 p-4">
+              <p class="text-xs uppercase tracking-[0.4em] text-white/60">Electrolyte range</p>
+              <p class="text-3xl font-bold text-white">${electrolyteMin}-${electrolyteMax} oz</p>
+              <p class="text-sm text-white/70">Sip enough to replenish (≥ ${electrolyteMin} oz) but cap the sweetness under ${electrolyteMax} oz.</p>
+            </div>
+            <div class="rounded-2xl border border-white/20 bg-white/10 p-4">
+              <p class="text-xs uppercase tracking-[0.4em] text-white/60">Your inputs</p>
+              <ul class="text-sm space-y-2">
+                <li><span class="text-white/60">Weight:</span> ${weight} lbs</li>
+                <li><span class="text-white/60">Activity pulse:</span> ${activityLabels[state.plan.activityMinutes] || `${state.plan.activityMinutes} min`} per day</li>
+                <li><span class="text-white/60">Climate boost:</span> +${state.climateBoost} oz buffer</li>
+              </ul>
+            </div>
+          </div>
+        `;
+
+        safetyList.innerHTML = `
+          <li>Never drop below <strong>${minimumWater} oz</strong> of total fluids.</li>
+          <li>Push for <strong>${optimalWater} oz</strong> to feel fully charged.</li>
+          <li>Flavored electrolytes must stay under <strong>${state.plan.electrolyteMax} oz</strong> today.</li>
+        `;
+      }
+
+      function updateTotals() {
+        if (!state.plan) {
+          waterSummary.textContent = "0 oz / 0 oz";
+          electrolyteSummary.textContent = "0 oz / 0 oz";
+          return;
         }
-        save() { return JSON.stringify({current:this.state.current,flags:this.state.flags,history:this.state.history}); }
-        load(str) { const obj=JSON.parse(str); this.state.flags=obj.flags||{}; this.state.history=obj.history||[]; this.#enter(obj.current); }
-        // ----- privates -----
-        #enter(id){
-          const n=this.data[id]; if(!n) throw Error(`Node ${id} missing`);
-          this.state.current=id; this.state.history.push(id);
-          if(n.flags) Object.entries(n.flags).forEach(([k,v])=>{ v===null?delete this.state.flags[k]:this.state.flags[k]=v; });
-          this.onScene({...n,visibleChoices:this.#visible(n)});
-          if(this._timer) clearTimeout(this._timer);
-          if(n.timeout && n.next){ this._timer=setTimeout(()=>this.#enter(n.next), n.timeout); }
-          if(typeof n.onEnter==="function") n.onEnter(this);
+        const { optimalWater, electrolyteMax, minimumWater, electrolyteMin } = state.plan;
+        const waterPercent = Math.min((state.totals.water / optimalWater) * 100, 130);
+        const electrolytePercent = Math.min((state.totals.electrolytes / electrolyteMax) * 100, 130);
+
+        waterSummary.textContent = `${state.totals.water} oz / ${optimalWater} oz`;
+        electrolyteSummary.textContent = `${state.totals.electrolytes} oz / ${electrolyteMax} oz`;
+
+        waterProgress.style.width = `${Math.min(waterPercent, 100)}%`;
+        electrolyteProgress.style.width = `${Math.min(electrolytePercent, 100)}%`;
+
+        waterProgress.style.backgroundColor = state.totals.water >= optimalWater
+          ? "#34d399"
+          : state.totals.water >= minimumWater
+            ? "#38bdf8"
+            : "#38bdf8";
+
+        electrolyteProgress.style.backgroundColor = state.totals.electrolytes > electrolyteMax
+          ? "#f87171"
+          : state.totals.electrolytes >= electrolyteMin
+            ? "#fcd34d"
+            : "#f59e0b";
+
+        if (state.totals.water === 0) {
+          waterFeedback.textContent = "Log your first glass to spark the flow.";
+        } else if (state.totals.water < minimumWater) {
+          const shortfall = minimumWater - state.totals.water;
+          waterFeedback.textContent = `You're ${shortfall} oz shy of the safety minimum—steady sipping!`;
+        } else if (state.totals.water < optimalWater) {
+          const push = optimalWater - state.totals.water;
+          waterFeedback.textContent = `Smooth sailing. ${push} oz left to hit the optimal glow-up.`;
+        } else {
+          waterFeedback.textContent = "Hydration hero! You’ve met today's optimal goal.";
         }
-        #visible(node){
-          if(!node.choices) return [];
-          let pool=node.choices.filter(c=>{
-            const reqOk=!c.require||c.require.every(f=>this.state.flags[f]);
-            const exOk=!c.exclude||c.exclude.every(f=>!this.state.flags[f]);
-            return reqOk&&exOk;
-          });
-          if(pool.some(c=>c.weight>1)){ const tot=pool.reduce((s,c)=>s+(c.weight||1),0); let roll=this.rng()*tot; for(const c of pool){ roll-=c.weight||1; if(roll<=0) return [c]; } }
-          return pool;
+
+        if (state.totals.electrolytes === 0) {
+          electrolyteFeedback.textContent = "Balanced electrolytes keep you charged without overload.";
+        } else if (state.totals.electrolytes < electrolyteMin) {
+          const stillNeed = electrolyteMin - state.totals.electrolytes;
+          electrolyteFeedback.textContent = `Consider ${stillNeed} more oz of electrolytes during workouts.`;
+        } else if (state.totals.electrolytes <= electrolyteMax) {
+          electrolyteFeedback.textContent = "Sweet spot maintained—nice work moderating the flavor!";
+        } else {
+          const over = state.totals.electrolytes - electrolyteMax;
+          electrolyteFeedback.textContent = `Ease up! You're ${over} oz over today's electrolyte ceiling.`;
+        }
+
+        if (state.totals.water >= minimumWater) {
+          streakBadge.textContent = `Hydration streak active — ${state.totals.water} oz logged so far!`;
+          streakBadge.classList.add("border-emerald-400", "bg-emerald-400/40");
+        } else {
+          streakBadge.textContent = "Hydration streak starts once you hit your minimum target.";
+          streakBadge.classList.remove("border-emerald-400", "bg-emerald-400/40");
         }
       }
-      // ========================= Demo Story =========================
-      const demoStory={
-        start:{
-          text:"Sirens cut through the night as **you** vault a toppled dumpster.\n\nTwo routes flash before you:",
-          choices:[
-            {text:"Scale the chain‑link fence",target:"fence",setFlags:{athletic:true}},
-            {text:"Kick open the service door",target:"door"}
-          ]
-        },
-        fence:{
-          text:"Your fingers sting as you haul over the rattling fence. An agent swings a stun gun up at you!",
-          choices:[
-            {text:"Leap to the alley",target:"alley",weight:2,require:["athletic"]},
-            {text:"Freeze and plead innocence",target:"caught"}
-          ]
-        },
-        door:{
-          text:"The rusty door screeches into a boiler room thick with steam.",
-          flags:{stealth:true},
-          choices:[
-            {text:"Sneak between the boilers",target:"boiler",require:["stealth"]},
-            {text:"Rip a pipe loose as weapon",target:"armed",setFlags:{armed:true},unsetFlags:["stealth"]}
-          ]
-        },
-        alley:{ text:"You roll onto wet asphalt and sprint into darkness. **You escaped—for now.**", choices:[] },
-        caught:{ text:"Blue arcs of electricity kiss your vision goodbye. **BUSTED.**", choices:[] },
-        boiler:{ text:"You glide past gauges. A secret hatch glows red ahead…", choices:[] },
-        armed:{ text:"Pipe in hand, you feel invincible—until footsteps echo behind you…", choices:[] }
-      };
-      // ========================= Renderer =========================
-      const sceneEl=document.getElementById("scene");
-      const choicesEl=document.getElementById("choices");
-      const md=(s)=>window.marked?marked.parse(s):s.replace(/\n/g,"<br>");
-      const engine=new StoryEngine({
-        data:demoStory,
-        onScene:({text,img,visibleChoices})=>{
-          sceneEl.innerHTML=md(text);
-          sceneEl.style.backgroundImage=img?`url(${img})`:"none";
-          choicesEl.innerHTML="";
-          if(!visibleChoices.length){
-            const end=document.createElement("p"); end.textContent="THE END — refresh to replay"; choicesEl.appendChild(end); return; }
-          visibleChoices.forEach((c,i)=>{
-            const b=document.createElement("button");
-            b.className="px-4 py-2 rounded bg-purple-700 hover:bg-purple-600 active:scale-95 transition text-white";
-            b.textContent=c.text;
-            b.onclick=()=>engine.choose(i);
-            choicesEl.appendChild(b);
-          });
-          localStorage.setItem('chaimAdventureSave',engine.save());
+
+      function refreshGuidance() {
+        if (!state.plan) {
+          guidancePanel.innerHTML = `<p class="text-white/70">Keep an eye here for pacing prompts, electrolyte balance reminders, and evening slowdown cues.</p>`;
+          return;
         }
+
+        const now = new Date();
+        const hour = now.getHours();
+        const { optimalWater, minimumWater } = state.plan;
+        const water = state.totals.water;
+
+        const insights = [];
+        if (hour < 11) {
+          insights.push(`Aim for <strong>${Math.round(optimalWater * 0.35)} oz</strong> before lunch to stay ahead.`);
+        } else if (hour < 17) {
+          insights.push(`Midday check-in: target <strong>${Math.round(optimalWater * 0.65)} oz</strong> logged by 5 PM.`);
+        } else {
+          insights.push("Evening wind-down: taper electrolytes and coast on water-only sips.");
+        }
+
+        if (water < minimumWater * 0.5) {
+          insights.push("You're still in the caution zone—queue up a tall glass ASAP.");
+        } else if (water >= optimalWater) {
+          insights.push("Mission accomplished! Focus on light maintenance sips and rest easy.");
+        } else {
+          insights.push("Nice pacing! Keep alternating water with electrolyte boosts when training.");
+        }
+
+        if (state.totals.electrolytes > state.plan.electrolyteMax) {
+          insights.push("Scale back flavored drinks for the rest of the day to protect your gut and kidneys.");
+        } else if (state.totals.electrolytes < state.plan.electrolyteMin && state.plan.activityMinutes >= 60) {
+          insights.push("Extended workouts detected—pack an electrolyte bottle for your next session.");
+        }
+
+        guidancePanel.innerHTML = `
+          <ul class="space-y-3 text-sm">
+            ${insights.map((line) => `<li class="rounded-2xl border border-white/20 bg-white/10 p-3">${line}</li>`).join("")}
+          </ul>
+        `;
+      }
+
+      function appendLog(type, amount) {
+        const timestamp = new Date();
+        state.log.unshift({ type, amount, timestamp });
+        const rows = state.log
+          .slice(0, 12)
+          .map((entry) => {
+            const time = entry.timestamp.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+            const badgeColor = entry.type === "water" ? "bg-sky-400/30 border-sky-400/40" : "bg-amber-400/30 border-amber-400/40";
+            const label = entry.type === "water" ? "Water" : "Electrolytes";
+            return `
+              <article class="rounded-2xl border ${badgeColor} px-3 py-2">
+                <div class="flex items-center justify-between">
+                  <span class="text-sm font-semibold">${label}</span>
+                  <span class="text-xs text-white/60">${time}</span>
+                </div>
+                <p class="text-lg font-semibold">${entry.amount} oz</p>
+              </article>
+            `;
+          })
+          .join("");
+
+        timeline.innerHTML = rows || '<p class="text-white/60">Entries will appear here once you start logging.</p>';
+      }
+
+      function logIntake(type) {
+        if (!state.plan) {
+          statusQuote.textContent = "Set your plan first.";
+          profileForm.scrollIntoView({ behavior: "smooth" });
+          return;
+        }
+        const amount = Number(logAmount.value);
+        if (!amount || amount <= 0) {
+          logAmount.focus();
+          logAmount.classList.add("ring-2", "ring-red-300");
+          setTimeout(() => logAmount.classList.remove("ring-2", "ring-red-300"), 600);
+          return;
+        }
+
+        state.totals[type] += Math.round(amount);
+        appendLog(type, Math.round(amount));
+        updateTotals();
+        refreshGuidance();
+        statusQuote.textContent = type === "water" ? "Water logged—keep flowing!" : "Electrolytes on point!";
+        logAmount.value = "";
+      }
+
+      addWaterBtn.addEventListener("click", (event) => {
+        event.preventDefault();
+        logIntake("water");
       });
-      try{ const saved=localStorage.getItem('chaimAdventureSave'); saved?engine.load(saved):engine.start(); }catch(e){ console.error(e); engine.start(); }
+
+      addElectrolyteBtn.addEventListener("click", (event) => {
+        event.preventDefault();
+        logIntake("electrolytes");
+      });
     </script>
   </body>
 </html>
